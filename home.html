@@ -302,11 +302,8 @@
     <button id="cancel-recording-btn" class="absolute top-6 right-6 text-3xl text-gray-500 hover:text-gray-700 transition-colors">&times;</button>
     
     <div class="text-center mb-8">
-      <h2 class="text-3xl font-bold text-gray-900 mb-2">🎙️ Live Opname & Transcriptie</h2>
-      <p class="text-gray-600">Spreek duidelijk - de AI schrijft realtime mee</p>
-      <div class="mt-2 text-sm text-blue-600 bg-blue-50 rounded-lg px-3 py-2 inline-block">
-        💡 <strong>Nieuw:</strong> AI identificeert automatisch Arts & Patiënt tijdens het gesprek
-      </div>
+      <h2 class="text-3xl font-bold text-gray-900 mb-2">Live Transcriptie</h2>
+      <p class="text-gray-600">AI identificeert automatisch Arts & Patiënt tijdens het gesprek</p>
     </div>
     
     <!-- Live Transcriptie Display (vervangt waveform) -->
@@ -446,8 +443,8 @@
     <!-- SOEP Tab -->
     <div id="soep-tab" class="tab-content hidden">
       <div class="mb-8">
-        <h2 class="text-3xl font-bold text-gray-900 mb-2">SOEP Verslag met Live Transcriptie</h2>
-        <p class="text-gray-600">Voer uw consultnotities in of gebruik spraakopname met real-time transcriptie voor automatische SOEP-structurering</p>
+        <h2 class="text-3xl font-bold text-gray-900 mb-2">SOEP Verslag</h2>
+        <p class="text-gray-600">Voer uw consultnotities in of gebruik spraakopname met real-time transcriptie</p>
       </div>
 
       <!-- Input Section -->
@@ -464,17 +461,17 @@
         
         <div class="flex flex-wrap gap-4">
           <button id="whisper-btn" class="px-6 py-3 blue-gradient text-white rounded-lg font-semibold hover:shadow-lg transition-all duration-300">
-            🎙️ Start Live Opname
+            Start Opname
           </button>
           <button id="generate-soep" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors">
-            SOEP Genereren
+            SOEP
           </button>
         </div>
       </div>
 
       <!-- SOEP Results -->
       <div id="verslag-container" class="hidden">
-        <h3 class="text-2xl font-bold text-gray-900 mb-6">Gegenereerd SOEP Verslag</h3>
+        <h3 class="text-2xl font-bold text-gray-900 mb-6">SOEP Verslag</h3>
         <div class="grid gap-6">
           <div id="s-section" class="soep-section">
             <div class="flex justify-between items-center mb-4">
