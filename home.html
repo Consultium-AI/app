@@ -1006,31 +1006,26 @@
           if (result.transcription && result.transcription.trim()) {
             const newText = result.transcription.trim();
             console.log(`📝 Raw transcription: "${newText}" (${newText.length} chars)`);
-            console.log(`📊 Current text length: ${liveTranscriptionText.length} chars`);
+            console.log(`📊 Previous text length: ${liveTranscriptionText.length} chars`);
             
-            // MUCH less aggressive duplicate detection - only if completely identical to last chunk
-            const lastChunk = liveTranscriptionText.split(' ').slice(-20).join(' ').trim().toLowerCase();
-            const isCompletelyIdentical = lastChunk.length > 10 && newText.toLowerCase() === lastChunk;
-            
-            if (!isCompletelyIdentical) {
-              console.log(`✅ Adding NEW transcription: "${newText}"`);
+            // REPLACEMENT STRATEGY: Each chunk contains the complete transcription
+            // Only update if this transcription is longer/different than what we have
+            if (newText.length > liveTranscriptionText.length || newText !== liveTranscriptionText) {
+              console.log(`✅ REPLACING with complete transcription: "${newText}"`);
               
-              // Always add new content - let it accumulate naturally
-              if (liveTranscriptionText && !liveTranscriptionText.endsWith(' ')) {
-                liveTranscriptionText += ' ';
-              }
-              liveTranscriptionText += newText;
+              // REPLACE the entire transcription with the new complete one
+              liveTranscriptionText = newText;
               
               updateLiveTranscriptionDisplay(liveTranscriptionText);
             } else {
-              console.log(`🔄 Skipping identical duplicate: "${newText}"`);
+              console.log(`🔄 Keeping existing transcription (same or shorter)`);
               // Still update display to show we're active with timestamp
               updateLiveTranscriptionDisplay(liveTranscriptionText);
             }
           } else {
             console.log(`⚠️ Empty transcription - server result:`, result);
-            console.log(`📊 Current accumulated text: "${liveTranscriptionText}" (${liveTranscriptionText.length} chars)`);
-            // Update display to show we're still listening
+            console.log(`📊 Current text: "${liveTranscriptionText}" (${liveTranscriptionText.length} chars)`);
+            // Update display to show we're still listening (but keep existing text)
             updateLiveTranscriptionDisplay(liveTranscriptionText || '🎤 Luister mee...');
           }
         } else if (result.status === 'skipped' || result.status === 'error') {
