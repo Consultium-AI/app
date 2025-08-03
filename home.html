@@ -793,7 +793,7 @@
        document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
        
        try {
-         const response = await fetch('https://4ab665a6ac5d.ngrok-free.app/chat-assistant', {
+         const response = await fetch('https://6fb1c6495709.ngrok-free.app/chat-assistant', {
            method: 'POST',
            headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({ message: message })
@@ -882,7 +882,7 @@
       showLoading(true);
 
     try {
-        const response = await fetch('https://4ab665a6ac5d.ngrok-free.app/generate-soep', {
+        const response = await fetch('https://6fb1c6495709.ngrok-free.app/generate-soep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: promptText })
@@ -958,53 +958,64 @@
 
     // Real-time transcription during recording
     async function sendRealtimeChunk() {
-      if (realtimeChunks.length === 0 || recordingCancelled) return;
+      if (recordingCancelled) {
+        console.log('🛑 Recording cancelled, stopping transcription');
+        return;
+      }
 
       try {
-        // Always send new chunks that haven't been processed yet
+        // Check if we have enough chunks
         if (realtimeChunks.length === 0) {
-          console.log('No new chunks available, waiting...');
+          console.log('⏳ No chunks yet, waiting...');
           return;
         }
 
-        // Use the most recent chunks (rolling window approach)
-        const chunksToSend = realtimeChunks.slice(-5); // Use last 5 chunks for better context
+        // Always use all available chunks for maximum context
+        const chunksToSend = realtimeChunks.slice(); // Copy all chunks
         
-        // Create audio blob from recent chunks
+        console.log(`📦 Preparing to send ${chunksToSend.length} chunks (total buffer: ${realtimeChunks.length})`);
+        
+        // Create audio blob from all chunks
         const chunkBlob = new Blob(chunksToSend, { type: 'audio/webm' });
         
-        // Check minimum size to avoid sending empty/corrupt files
-        if (chunkBlob.size < 500) { // Less than 500 bytes is probably corrupt
-          console.log('Chunk too small, skipping...');
-          return;
+        // More lenient size check - even small chunks might have speech
+        if (chunkBlob.size < 100) { 
+          console.log(`⚠️ Very small chunk (${chunkBlob.size} bytes), but sending anyway...`);
         }
 
-        console.log(`📤 Sending chunk (${chunkBlob.size} bytes, ${chunksToSend.length} chunks, total chunks: ${realtimeChunks.length})`);
+        console.log(`📤 Sending chunk (${chunkBlob.size} bytes, ${chunksToSend.length} chunks)`);
 
         const formData = new FormData();
         formData.append('audio_chunk', chunkBlob, 'chunk.webm');
 
-        const response = await fetch('https://4ab665a6ac5d.ngrok-free.app/realtime-transcribe', {
+        const response = await fetch('https://6fb1c6495709.ngrok-free.app/realtime-transcribe', {
           method: 'POST',
           body: formData
         });
 
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
         const result = await response.json();
-        console.log(`📨 Server response:`, result);
+        console.log(`📨 Server response status: ${response.status}, result:`, result);
         
         if (result.status === 'success') {
+          console.log(`🔍 Full server result:`, JSON.stringify(result, null, 2));
+          
           if (result.transcription && result.transcription.trim()) {
             const newText = result.transcription.trim();
+            console.log(`📝 Raw transcription: "${newText}" (${newText.length} chars)`);
+            console.log(`📊 Current text length: ${liveTranscriptionText.length} chars`);
             
-            // Simple duplicate detection: don't add if it's largely the same as the end of existing text
-            const lastWords = liveTranscriptionText.split(' ').slice(-10).join(' ').toLowerCase();
-            const newWordsLower = newText.toLowerCase();
-            const similarity = lastWords.length > 0 && newWordsLower.includes(lastWords.slice(-20));
+            // MUCH less aggressive duplicate detection - only if completely identical to last chunk
+            const lastChunk = liveTranscriptionText.split(' ').slice(-20).join(' ').trim().toLowerCase();
+            const isCompletelyIdentical = lastChunk.length > 10 && newText.toLowerCase() === lastChunk;
             
-            if (!similarity || lastWords.length < 20) {
-              console.log(`📝 Adding NEW transcription: "${newText}"`);
+            if (!isCompletelyIdentical) {
+              console.log(`✅ Adding NEW transcription: "${newText}"`);
               
-              // Add space if needed and append new text
+              // Always add new content - let it accumulate naturally
               if (liveTranscriptionText && !liveTranscriptionText.endsWith(' ')) {
                 liveTranscriptionText += ' ';
               }
@@ -1012,24 +1023,25 @@
               
               updateLiveTranscriptionDisplay(liveTranscriptionText);
             } else {
-              console.log(`🔄 Skipping likely duplicate: "${newText}"`);
-              // Still update display to show we're active
+              console.log(`🔄 Skipping identical duplicate: "${newText}"`);
+              // Still update display to show we're active with timestamp
               updateLiveTranscriptionDisplay(liveTranscriptionText);
             }
           } else {
-            console.log(`📝 Empty transcription received (length: ${result.length || 0})`);
+            console.log(`⚠️ Empty transcription - server result:`, result);
+            console.log(`📊 Current accumulated text: "${liveTranscriptionText}" (${liveTranscriptionText.length} chars)`);
             // Update display to show we're still listening
             updateLiveTranscriptionDisplay(liveTranscriptionText || '🎤 Luister mee...');
           }
         } else if (result.status === 'skipped' || result.status === 'error') {
-          console.log('Chunk processing skipped/failed, continuing...');
+          console.log('❌ Chunk processing failed:', result);
         }
 
-        // IMPORTANT: Keep ALL chunks for continuous transcription
-        // Only trim if we have too many (prevent memory issues after very long recordings)
-        if (realtimeChunks.length > 50) { // Only trim after 50 chunks (~100 seconds)
-          realtimeChunks = realtimeChunks.slice(-30); // Keep last 30 chunks
-          console.log('🧹 Trimmed old chunks to prevent memory issues');
+        // Smarter chunk management: keep recent chunks but don't let it grow infinitely
+        if (realtimeChunks.length > 30) { // Trim more frequently to avoid huge blobs
+          const oldLength = realtimeChunks.length;
+          realtimeChunks = realtimeChunks.slice(-15); // Keep last 15 chunks (~30 seconds)
+          console.log(`🧹 Trimmed chunks: ${oldLength} → ${realtimeChunks.length}`);
         }
 
       } catch (error) {
@@ -1109,9 +1121,17 @@
          
          mediaRecorder.ondataavailable = event => {
            if (event.data.size > 0 && !recordingCancelled) {
-             console.log(`🎵 Audio chunk received: ${event.data.size} bytes`);
+             console.log(`🎵 Audio chunk received: ${event.data.size} bytes (total chunks: ${realtimeChunks.length + 1})`);
              audioChunks.push(event.data);  // For final batch transcription
              realtimeChunks.push(event.data);  // For real-time transcription
+             
+             // Show that we're actively receiving audio
+             const display = document.getElementById('live-transcript-content');
+             if (realtimeChunks.length === 1) {
+               display.innerHTML = '<div class="typing-indicator" style="color: #0891b2;">🎵 Audio gedetecteerd, transcriptie start binnenkort...</div>';
+             }
+           } else if (event.data.size === 0) {
+             console.log('⚠️ Empty audio chunk received');
            }
          };
          
@@ -1127,14 +1147,19 @@
          // Initialize live transcription display
          updateLiveTranscriptionDisplay('');
          
-         // Start real-time transcription interval - shorter for faster response  
+         // Start real-time transcription interval - faster for immediate feedback  
          realtimeInterval = setInterval(() => {
            if (!recordingCancelled && mediaRecorder && mediaRecorder.state === 'recording') {
+             console.log(`🔄 Real-time interval tick - chunks available: ${realtimeChunks.length}`);
              sendRealtimeChunk();
            } else {
              console.log('⏹️ Recording stopped or cancelled, stopping real-time transcription');
+             if (realtimeInterval) {
+               clearInterval(realtimeInterval);
+               realtimeInterval = null;
+             }
            }
-         }, 3000); // Every 3 seconds for faster response
+         }, 2500); // Every 2.5 seconds for faster response
          
        } catch (error) {
          console.error('Recording error:', error);
@@ -1220,7 +1245,7 @@
        showLoading(true);
        
        try {
-         const response = await fetch('https://4ab665a6ac5d.ngrok-free.app/transcribe-audio', {
+         const response = await fetch('https://6fb1c6495709.ngrok-free.app/transcribe-audio', {
            method: 'POST',
            body: formData
          });
@@ -1246,8 +1271,8 @@
       }
          
             // Clean up
-      if (audioStream) {
-        audioStream.getTracks().forEach(track => track.stop());
+         if (audioStream) {
+           audioStream.getTracks().forEach(track => track.stop());
         audioStream = null;
       }
       
@@ -1349,7 +1374,7 @@
          const language2 = document.getElementById('language-2').value;
          
          // Send to AI for intelligent language detection and translation
-         const response = await fetch('https://4ab665a6ac5d.ngrok-free.app/intelligent-translate', {
+         const response = await fetch('https://6fb1c6495709.ngrok-free.app/intelligent-translate', {
            method: 'POST',
            headers: {
              'Content-Type': 'application/json',
