@@ -591,12 +591,12 @@
          <button id="tolk-record-btn" class="w-28 h-28 rounded-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white flex items-center justify-center hover:shadow-lg transition-all duration-300 transform hover:scale-105 mx-auto">
            <svg class="w-12 h-12" fill="currentColor" viewBox="0 0 20 20">
              <path d="M3 10a7 7 0 1114 0 7 7 0 01-14 0zm7-4a1 1 0 00-1 1v3a1 1 0 102 0V7a1 1 0 00-1-1zm-3 4a3 3 0 106 0H7z"/>
-           </svg>
-         </button>
+               </svg>
+             </button>
          <p class="text-sm text-gray-500 mt-3">Klik om verbinding te maken en te spreken</p>
          <audio id="tolk-remote-audio" autoplay class="hidden"></audio>
        </div>
-     </div>
+    </div>
   </main>
 
   <!-- Scripts -->
@@ -1267,7 +1267,7 @@
          tolkBtn.addEventListener('click', async function() {
            if (!isRealtimeActive) {
              await startRealtime();
-           } else {
+            } else {
              await stopRealtime();
            }
          });
