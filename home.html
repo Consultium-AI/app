@@ -545,19 +545,18 @@
 
 
 
-     <!-- Live Tolk Tab -->
+     <!-- Live Tolk Tab (minimal) -->
      <div id="tolk-tab" class="tab-content hidden">
        <div class="mb-8">
-         <h2 class="text-3xl font-bold text-gray-900 mb-2">Live Tolk - Intelligente Vertaling</h2>
-         <p class="text-gray-600">Automatische taaldetectie en vertaling - spreek gewoon en de AI doet de rest!</p>
+         <h2 class="text-3xl font-bold text-gray-900 mb-2">Live Tolk</h2>
+         <p class="text-gray-600">Eén knop om te spreken met GPT‑4o Realtime. Taalkeuze is alleen visueel.</p>
        </div>
 
-       <!-- Language Selection -->
        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 mb-8">
          <h3 class="text-xl font-semibold text-gray-900 mb-4">Taal Instellingen</h3>
          <div class="grid md:grid-cols-2 gap-6">
            <div>
-             <label class="block text-sm font-medium text-gray-700 mb-2">Taal 1 (meestal Nederlands)</label>
+             <label class="block text-sm font-medium text-gray-700 mb-2">Taal 1 (arts)</label>
              <select id="language-1" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                <option value="nl">Nederlands</option>
                <option value="en">English</option>
@@ -567,7 +566,7 @@
              </select>
            </div>
            <div>
-             <label class="block text-sm font-medium text-gray-700 mb-2">Taal 2 (patiënt taal)</label>
+             <label class="block text-sm font-medium text-gray-700 mb-2">Taal 2 (patiënt)</label>
              <select id="language-2" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                <option value="en">English</option>
                <option value="ar">العربية</option>
@@ -587,67 +586,17 @@
          </div>
        </div>
 
-       <!-- Single Recording Interface -->
-       <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-200 mb-8">
-         <div class="text-center mb-6">
-           <div id="tolk-status" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-full text-sm inline-block mb-4">
-             Klaar om te starten
-           </div>
-           
-           <div class="mb-6">
-             <button id="tolk-record-btn" class="w-24 h-24 rounded-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white flex items-center justify-center hover:shadow-lg transition-all duration-300 transform hover:scale-105 mx-auto">
-               <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
-               </svg>
-             </button>
-             <p class="text-lg text-gray-600 mt-3">Klik om te spreken</p>
-             <p class="text-sm text-gray-500">Live spraak-naar-spraak vertaling - spreek en luister direct</p>
-           </div>
-         </div>
-
-         <!-- Language 1 (Doctor) -->
-         <div class="mb-6">
-           <h4 class="text-lg font-semibold text-gray-900 mb-3">Taal van arts <span id="doctor-lang-display" class="text-sm text-gray-500">(Nederlands)</span></h4>
-           <div id="live-transcript" class="min-h-24 p-4 bg-gray-50 rounded-lg border border-gray-200 text-gray-700">
-             <span class="text-gray-400">Gesproken woorden verschijnen hier...</span>
-           </div>
-         </div>
-
-         <!-- Language 2 (Patient) -->
-         <div>
-           <h4 class="text-lg font-semibold text-gray-900 mb-3">Taal van patiënt <span id="patient-lang-display" class="text-sm text-gray-500">(English)</span></h4>
-           <div id="translation-output" class="min-h-24 p-4 bg-blue-50 rounded-lg border border-blue-200 text-blue-800">
-             <span class="text-blue-400">Automatische vertaling verschijnt hier...</span>
-           </div>
-         </div>
+       <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-200 mb-8 text-center">
+         <div id="tolk-status" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-full text-sm inline-block mb-4">Niet verbonden</div>
+         <button id="tolk-record-btn" class="w-28 h-28 rounded-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white flex items-center justify-center hover:shadow-lg transition-all duration-300 transform hover:scale-105 mx-auto">
+           <svg class="w-12 h-12" fill="currentColor" viewBox="0 0 20 20">
+             <path d="M3 10a7 7 0 1114 0 7 7 0 01-14 0zm7-4a1 1 0 00-1 1v3a1 1 0 102 0V7a1 1 0 00-1-1zm-3 4a3 3 0 106 0H7z"/>
+           </svg>
+         </button>
+         <p class="text-sm text-gray-500 mt-3">Klik om verbinding te maken en te spreken</p>
+         <audio id="tolk-remote-audio" autoplay class="hidden"></audio>
        </div>
-
-       <!-- Live Conversation Display -->
-       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 mb-8">
-         <h3 class="text-xl font-semibold text-gray-900 mb-4">Live Gesprek</h3>
-         <div id="tolk-conversation-history" class="space-y-4 max-h-64 overflow-y-auto custom-scrollbar">
-           <div class="text-gray-500 text-center py-8">Live gesprek wordt hier weergegeven tijdens de sessie...</div>
-         </div>
-         <p class="text-sm text-gray-500 mt-4">Na het gesprek kunt u de samenvatting kopiëren naar uw HIS-systeem via SOEP verslag</p>
-       </div>
-
-       <!-- How it works -->
-       <div class="bg-blue-50 rounded-2xl p-6 border border-blue-200">
-         <h3 class="text-lg font-semibold text-blue-900 mb-3">Hoe werkt de Intelligente Tolk?</h3>
-         <div class="grid md:grid-cols-2 gap-4 text-sm text-blue-800">
-           <div class="space-y-2">
-             <p><strong>1. Live gesprek:</strong> AI luistert en vertaalt in real-time</p>
-             <p><strong>2. Speech-to-speech:</strong> Spreek en krijg direct gesproken antwoord</p>
-             <p><strong>3. Automatische detectie:</strong> Herkent taal en vertaalt naar de andere</p>
-           </div>
-           <div class="space-y-2">
-             <p><strong>4. Live weergave:</strong> Gesprek wordt live getoond, niet opgeslagen</p>
-             <p><strong>5. SOEP integratie:</strong> Na gesprek via SOEP naar HIS-systeem</p>
-             <p><strong>6. Een-klik-bediening:</strong> Simpel en intuïtief gebruik</p>
-           </div>
-         </div>
-       </div>
-    </div>
+     </div>
   </main>
 
   <!-- Scripts -->
@@ -706,7 +655,7 @@
       showLoading(true);
 
     try {
-        const response = await fetch('https://48ca6b551dcd.ngrok-free.app/generate-soep', {
+        const response = await fetch('https://e045bc25fe28.ngrok-free.app/generate-soep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: promptText })
@@ -812,7 +761,7 @@
         const formData = new FormData();
         formData.append('audio_chunk', chunkBlob, 'chunk.webm');
 
-        const response = await fetch('https://48ca6b551dcd.ngrok-free.app/realtime-transcribe', {
+        const response = await fetch('https://e045bc25fe28.ngrok-free.app/realtime-transcribe', {
           method: 'POST',
           body: formData
         });
@@ -1112,7 +1061,7 @@
        showLoading(true);
        
        try {
-         const response = await fetch('https://48ca6b551dcd.ngrok-free.app/transcribe-audio', {
+         const response = await fetch('https://e045bc25fe28.ngrok-free.app/transcribe-audio', {
            method: 'POST',
            body: formData
          });
@@ -1173,194 +1122,93 @@
        this.style.height = Math.min(this.scrollHeight, 200) + 'px';
      });
 
-      // Intelligente Live Tolk (continue opname met stilte-detectie)
-      let tolkConversationHistory = [];
-      let isRecording = false;
-      let tolkActive = false;
-      let tolkMediaRecorder = null;
-      let tolkStream = null;
-      let tolkAudioCtx = null;
-      let tolkAnalyser = null;
-      let tolkVadInterval = null;
-      let tolkCollecting = false;
-      let tolkUtteranceChunks = [];
-      let currentTolkAudio = null;
-      let isSendingUtterance = false;
-      const TIMESLICE_MS = 200; // kleinere chunks voor lagere latency
-      const VAD_THRESHOLD = 0.02; // RMS drempel
-      const MIN_SILENCE_MS = 450; // stilte om utterance te sluiten
-      const MIN_UTTERANCE_MS = 350; // minimale duur om te versturen
-      let lastSpeechTs = 0;
-
-      function computeRms(analyser) {
-        const len = analyser.fftSize;
-        const buf = new Float32Array(len);
-        analyser.getFloatTimeDomainData(buf);
-        let sum = 0;
-        for (let i = 0; i < len; i++) sum += buf[i] * buf[i];
-        return Math.sqrt(sum / len);
-      }
-
-      async function startTolkContinuous() {
-        if (tolkActive) return;
-        try {
-          if (currentTolkAudio) { try { currentTolkAudio.pause(); } catch(_){} currentTolkAudio = null; }
-          tolkStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          const options = MediaRecorder.isTypeSupported('audio/webm') ? { mimeType: 'audio/webm' } : {};
-          tolkMediaRecorder = new MediaRecorder(tolkStream, options);
-          tolkCollecting = false;
-          tolkUtteranceChunks = [];
-          tolkActive = true;
-
-          // WebAudio analyser voor eenvoudige VAD
-          tolkAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          const source = tolkAudioCtx.createMediaStreamSource(tolkStream);
-          tolkAnalyser = tolkAudioCtx.createAnalyser();
-          tolkAnalyser.fftSize = 2048;
-          source.connect(tolkAnalyser);
-
-          tolkMediaRecorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0 && tolkCollecting) {
-              tolkUtteranceChunks.push(e.data);
-            }
-          };
-
-          tolkMediaRecorder.onstart = () => {
-            updateTolkStatus('Luistert…', 'bg-green-100 text-green-600');
-            isRecording = true;
-            document.getElementById('live-transcript').innerHTML = '<span class="text-gray-400">Spreek een zin. Bij stilte wordt automatisch vertaald…</span>';
-          };
-
-          tolkMediaRecorder.start(TIMESLICE_MS);
-
-          // VAD loop
-          lastSpeechTs = Date.now();
-          tolkVadInterval = setInterval(async () => {
-            if (!tolkActive || !tolkAnalyser) return;
-            const rms = computeRms(tolkAnalyser);
-            const now = Date.now();
-            if (rms > VAD_THRESHOLD) {
-              lastSpeechTs = now;
-              if (!tolkCollecting) {
-                tolkCollecting = true;
-                tolkUtteranceChunks = [];
-              }
-            } else {
-              const silenceMs = now - lastSpeechTs;
-              if (tolkCollecting && silenceMs >= MIN_SILENCE_MS) {
-                const utteranceBlob = new Blob(tolkUtteranceChunks, { type: 'audio/webm' });
-                const utteranceMs = tolkUtteranceChunks.length * TIMESLICE_MS;
-                tolkCollecting = false;
-                tolkUtteranceChunks = [];
-                if (!isSendingUtterance && utteranceBlob.size > 200 && utteranceMs >= MIN_UTTERANCE_MS) {
-                  sendUtteranceForS2S(utteranceBlob);
-                }
-              }
-            }
-          }, 120);
-
-        } catch (err) {
-          console.error('Tolk start fout:', err);
-          updateTolkStatus('Fout bij microfoon', 'bg-red-100 text-red-600');
-        }
-      }
-
-      async function stopTolkContinuous() {
-        if (!tolkActive) return;
-        tolkActive = false;
-        try { if (tolkVadInterval) { clearInterval(tolkVadInterval); tolkVadInterval = null; } } catch(_){ }
-        try { if (tolkMediaRecorder && tolkMediaRecorder.state === 'recording') { tolkMediaRecorder.stop(); } } catch(_){ }
-        try { if (tolkStream) { tolkStream.getTracks().forEach(t => t.stop()); tolkStream = null; } } catch(_){ }
-        try { if (tolkAudioCtx) { await tolkAudioCtx.close(); } } catch(_){ }
-        isRecording = false;
-        updateTolkStatus('Klaar om te starten', 'bg-gray-100 text-gray-600');
-      }
-
-      async function sendUtteranceForS2S(utteranceBlob) {
-        isSendingUtterance = true;
-        try {
-          updateTolkStatus('Vertalen…', 'bg-yellow-100 text-yellow-600');
-          const formData = new FormData();
-          formData.append('file', utteranceBlob, 'utterance.webm');
-          formData.append('language_1', document.getElementById('language-1').value);
-          formData.append('language_2', document.getElementById('language-2').value);
-          const resp = await fetch('https://48ca6b551dcd.ngrok-free.app/speech-to-speech', { method: 'POST', body: formData });
-          const data = await resp.json();
-          if (!resp.ok || data.error) throw new Error(data.error || 'Serverfout');
-
-          document.getElementById('live-transcript').innerHTML = data.transcript || '<span class="text-gray-400">Geen transcriptie</span>';
-          const translationOutput = document.getElementById('translation-output');
-          translationOutput.innerHTML = `
-            <div class="mb-3">
-              <p class="text-sm text-blue-600 font-medium">Gedetecteerde taal: ${data.detected_language_name || ''}</p>
-              <p class="text-sm text-blue-600">Vertaald naar: ${data.target_language_name || ''}</p>
-            </div>
-            <div class="text-blue-800 font-medium">${data.translation || ''}</div>
-          `;
-
-          if (data.audio_base64) {
-            const src = `data:${data.audio_mime_type || 'audio/mpeg'};base64,${data.audio_base64}`;
-            const audio = new Audio(src);
-            currentTolkAudio = audio;
-            audio.play().catch(err => console.warn('Audio play blocked:', err));
-          }
-
-          addToTolkHistory(data.transcript || '', data.translation || '', data.detected_language_name || '', data.target_language_name || '');
-          updateTolkStatus('Luistert…', 'bg-green-100 text-green-600');
-        } catch (err) {
-          console.error('S2S error:', err);
-          updateTolkStatus('Fout bij vertalen', 'bg-red-100 text-red-600');
-        } finally {
-          isSendingUtterance = false;
-        }
-      }
+      // Minimal Live Tolk using GPT‑4o Realtime via WebRTC
+      let isRealtimeActive = false;
+      let pc = null;
+      let localMicStream = null;
+      let remoteAudioStream = null;
 
       function updateTolkStatus(text, className) {
-       const statusEl = document.getElementById('tolk-status');
-       statusEl.textContent = text;
-       statusEl.className = `px-4 py-2 rounded-full text-sm inline-block mb-4 ${className}`;
-     }
+        const el = document.getElementById('tolk-status');
+        if (!el) return;
+        el.textContent = text;
+        el.className = `px-4 py-2 rounded-full text-sm inline-block mb-4 ${className}`;
+      }
 
+      async function startRealtime() {
+        try {
+          updateTolkStatus('Verbinding maken…', 'bg-yellow-100 text-yellow-700');
 
-     function addToTolkHistory(original, translation, fromLang, toLang) {
-       const historyItem = {
-         timestamp: new Date(),
-         original: original,
-         translation: translation,
-         fromLanguage: fromLang,
-         toLanguage: toLang
-       };
-       
-       tolkConversationHistory.push(historyItem);
-       updateTolkConversationDisplay();
-     }
+          // 1) Fetch ephemeral token from backend
+          const sessionResp = await fetch('https://e045bc25fe28.ngrok-free.app/session', { method: 'POST' });
+          const sessionData = await sessionResp.json();
+          if (!sessionResp.ok || sessionData.error) throw new Error(sessionData.error || 'Session error');
+          const ephemeral = sessionData?.client_secret?.value;
+          if (!ephemeral) throw new Error('Geen ephemeral token ontvangen');
 
-     function updateTolkConversationDisplay() {
-       const historyEl = document.getElementById('tolk-conversation-history');
-       
-       if (tolkConversationHistory.length === 0) {
-         historyEl.innerHTML = '<div class="text-gray-500 text-center py-8">Gesprek geschiedenis verschijnt hier...</div>';
-         return;
-       }
-       
-       historyEl.innerHTML = tolkConversationHistory.map((item, index) => `
-         <div class="border-l-4 border-blue-500 bg-blue-50 p-4 rounded-r-lg">
-           <div class="flex justify-between items-start mb-2">
-             <span class="font-medium text-blue-900">
-               Gesprek ${index + 1} (${item.fromLanguage} → ${item.toLanguage})
-             </span>
-             <span class="text-xs text-gray-500">${item.timestamp.toLocaleTimeString()}</span>
-           </div>
-           <div class="text-sm text-gray-700 mb-1"><strong>Origineel (${item.fromLanguage}):</strong> ${item.original}</div>
-           <div class="text-sm text-gray-600"><strong>Vertaling (${item.toLanguage}):</strong> ${item.translation}</div>
-         </div>
-       `).join('');
-       
-       historyEl.scrollTop = historyEl.scrollHeight;
-     }
+          // 2) Prepare RTCPeerConnection
+          pc = new RTCPeerConnection();
+          const audioEl = document.getElementById('tolk-remote-audio');
+          remoteAudioStream = new MediaStream();
+          if (audioEl) audioEl.srcObject = remoteAudioStream;
 
-     // Live conversation gets cleared automatically when session ends
-     // No manual clear/export functions needed for live translator
+          pc.ontrack = (event) => {
+            for (const track of event.streams[0].getTracks()) {
+              remoteAudioStream.addTrack(track);
+            }
+          };
+
+          // Data channel (optional, reserved for future UI updates)
+          pc.createDataChannel('oai-events');
+
+          // 3) Get mic and add to connection
+          localMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          for (const track of localMicStream.getTracks()) {
+            pc.addTrack(track, localMicStream);
+          }
+
+          // 4) Create SDP offer
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+
+          // 5) Send offer to OpenAI Realtime to get answer
+          const sdpResp = await fetch('https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${ephemeral}`,
+              'Content-Type': 'application/sdp',
+              'OpenAI-Beta': 'realtime=v1'
+            },
+            body: offer.sdp
+          });
+          const answerSdp = await sdpResp.text();
+          await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+
+          isRealtimeActive = true;
+          updateTolkStatus('Verbonden – spreek nu', 'bg-green-100 text-green-600');
+        } catch (err) {
+          console.error('Realtime start error:', err);
+          updateTolkStatus('Fout bij verbinden', 'bg-red-100 text-red-600');
+          await stopRealtime();
+        }
+      }
+
+      async function stopRealtime() {
+        try {
+          if (pc) {
+            try { pc.close(); } catch(_){}
+            pc = null;
+          }
+          if (localMicStream) {
+            try { localMicStream.getTracks().forEach(t => t.stop()); } catch(_){}
+            localMicStream = null;
+          }
+          isRealtimeActive = false;
+          updateTolkStatus('Niet verbonden', 'bg-gray-100 text-gray-600');
+        } catch (_) {
+          // ignore
+        }
+      }
 
      // Language name mappings
      const languageNames = {
@@ -1398,8 +1246,6 @@
 
       // Initialize intelligent tolk when page loads
      document.addEventListener('DOMContentLoaded', function() {
-       // continuous server-based tolk init (no browser SR)
-       
        // Update language displays when selections change
        const lang1Select = document.getElementById('language-1');
        const lang2Select = document.getElementById('language-2');
@@ -1418,19 +1264,14 @@
        const tolkBtn = document.getElementById('tolk-record-btn');
        
        if (tolkBtn) {
-          // Toggle start/stop continuous listening
-          tolkBtn.addEventListener('click', function() {
-            if (!tolkActive) {
-              startTolkContinuous();
-            } else {
-              stopTolkContinuous();
-            }
-          });
-
-         // Prevent context menu on long press
-         tolkBtn.addEventListener('contextmenu', function(e) {
-           e.preventDefault();
+         tolkBtn.addEventListener('click', async function() {
+           if (!isRealtimeActive) {
+             await startRealtime();
+           } else {
+             await stopRealtime();
+           }
          });
+         tolkBtn.addEventListener('contextmenu', function(e) { e.preventDefault(); });
        }
     });
   </script>
