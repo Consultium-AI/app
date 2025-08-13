@@ -602,7 +602,6 @@
        </div>
 
        <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-200 mb-8 text-center">
-          <div id="tolk-status" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-full text-sm inline-block mb-4">Klaar voor spraak‑naar‑spraak</div>
           <div id="tolk-visual-wrapper" class="relative inline-block mx-auto">
             <span class="speak-ring r1"></span>
             <span class="speak-ring r2"></span>
@@ -612,6 +611,7 @@
               </svg>
             </button>
           </div>
+          <div id="tolk-status" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-full text-sm inline-block mt-4 mb-4">Klaar voor spraak‑naar‑spraak</div>
           <canvas id="tolk-visualizer" class="w-full max-w-md h-20 mx-auto mt-4"></canvas>
          <p class="text-sm text-gray-500 mt-3">Klik om spraak‑naar‑spraak vertaling te starten/stoppen</p>
          <audio id="tolk-remote-audio" autoplay class="hidden"></audio>
@@ -1259,7 +1259,7 @@
         const el = document.getElementById('tolk-status');
         if (!el) return;
         el.textContent = text;
-        el.className = `px-4 py-2 rounded-full text-sm inline-block mb-4 ${className}`;
+        el.className = `px-4 py-2 rounded-full text-sm inline-block mt-4 mb-4 ${className}`;
       }
 
       async function startRealtime() {
