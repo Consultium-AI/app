@@ -790,7 +790,7 @@
       showLoading(true);
 
     try {
-        const response = await fetch('https://dde338680bd1.ngrok-free.app/generate-soep', {
+        const response = await fetch('https://c0fce75a838e.ngrok-free.app/generate-soep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: promptText })
@@ -863,13 +863,7 @@
     let realtimeChunks = [];
     let realtimeInterval = null;
     let liveTranscriptionText = '';
-    // Long-session controls (avoid memory growth for hour-long recordings)
-    let unsentChunks = [];
-    let recentHistory = [];
-    let isSendingRealtime = false;
-    const CONTEXT_CHUNKS = 5; // keep ~10s of context (2s chunks)
-    const CHUNK_MS = 2000; // 2-second chunks
-    const REALTIME_INTERVAL_MS = 2500;
+    
 
     // Real-time transcription during recording
     async function sendRealtimeChunk() {
@@ -879,31 +873,29 @@
       }
 
       try {
-        // Prevent overlapping sends
-        if (isSendingRealtime) return;
-        // Only send when we have new audio
-        if (unsentChunks.length === 0) {
-          console.log('⏳ No new chunks yet, waiting...');
+        // Check if we have enough chunks
+        if (realtimeChunks.length === 0) {
+          console.log('⏳ No chunks yet, waiting...');
           return;
         }
 
-        isSendingRealtime = true;
-        // Keep a short context + the new chunks
-        const context = recentHistory.slice(-CONTEXT_CHUNKS);
-        const chunksToSend = context.concat(unsentChunks);
+        // Always use all available chunks for maximum context (increasing latency over time)
+        const chunksToSend = realtimeChunks.slice(); // Copy all chunks
         
-        console.log(`📦 Preparing to send ${chunksToSend.length} chunks (context ${context.length}, new ${unsentChunks.length})`);
+        console.log(`📦 Preparing to send ${chunksToSend.length} chunks (total buffer: ${realtimeChunks.length})`);
         
-        // Create audio blob
+        // Create audio blob from all chunks
         const chunkBlob = new Blob(chunksToSend, { type: 'audio/webm' });
-        if (chunkBlob.size < 100) {
-          console.log(`⚠️ Very small chunk (${chunkBlob.size} bytes), sending anyway...`);
+        
+        // More lenient size check - even small chunks might have speech
+        if (chunkBlob.size < 100) { 
+          console.log(`⚠️ Very small chunk (${chunkBlob.size} bytes), but sending anyway...`);
         }
 
         const formData = new FormData();
         formData.append('audio_chunk', chunkBlob, 'chunk.webm');
 
-        const response = await fetch('https://dde338680bd1.ngrok-free.app/realtime-transcribe', {
+        const response = await fetch('https://c0fce75a838e.ngrok-free.app/realtime-transcribe', {
           method: 'POST',
           body: formData
         });
@@ -917,42 +909,34 @@
 
         if (result.status === 'success') {
           console.log(`🔍 Full server result:`, JSON.stringify(result, null, 2));
-
+          
           if (result.transcription && result.transcription.trim()) {
             const newText = result.transcription.trim();
-            const hasSpeakerLabels = newText.includes('Arts:') || newText.includes('Patiënt:');
-
-            if (newText.length > liveTranscriptionText.length || newText !== liveTranscriptionText) {
-              if (hasSpeakerLabels) {
-                console.log('🎭 Speaker-formatted content detected');
-              }
-              // Compute only the delta to avoid flicker and ensure forward progress
-              const delta = computeDelta(liveTranscriptionText, newText);
-              if (delta) {
-                liveTranscriptionText = newText;
-                updateLiveTranscriptionDisplay(liveTranscriptionText);
-              }
-            } else {
-              updateLiveTranscriptionDisplay(liveTranscriptionText);
-            }
+            console.log(`📝 Raw transcription: "${newText}" (${newText.length} chars)`);
+            console.log(`📊 Previous text length: ${liveTranscriptionText.length} chars`);
+            
+            // Replace the entire transcript with the new complete one
+            liveTranscriptionText = newText;
+            updateLiveTranscriptionDisplay(liveTranscriptionText);
           } else {
+            console.log(`⚠️ Empty transcription - server result:`, result);
+            console.log(`📊 Current text: "${liveTranscriptionText}" (${liveTranscriptionText.length} chars)`);
             updateLiveTranscriptionDisplay(liveTranscriptionText || '🎤 Luister mee...');
           }
         } else if (result.status === 'skipped' || result.status === 'error') {
           console.log('❌ Chunk processing failed:', result);
         }
 
-        // Clear the unsent buffer and keep only a small context window
-        unsentChunks = [];
-        if (recentHistory.length > CONTEXT_CHUNKS) {
-          recentHistory = recentHistory.slice(-CONTEXT_CHUNKS);
+        // Smarter chunk management: keep recent chunks but don't let it grow infinitely
+        if (realtimeChunks.length > 30) { // Trim more frequently to avoid huge blobs
+          const oldLength = realtimeChunks.length;
+          realtimeChunks = realtimeChunks.slice(-15); // Keep last 15 chunks (~30 seconds)
+          console.log(`🧹 Trimmed chunks: ${oldLength} → ${realtimeChunks.length}`);
         }
 
       } catch (error) {
         console.error('Real-time transcription error:', error);
         // Don't stop recording on transcription errors - just continue
-      } finally {
-        isSendingRealtime = false;
       }
     }
 
@@ -1086,49 +1070,47 @@
          mediaRecorder = new MediaRecorder(audioStream, options);
          
          mediaRecorder.ondataavailable = event => {
-           if (event.data.size > 0 && !recordingCancelled) {
-             console.log(`🎵 Audio chunk received: ${event.data.size} bytes`);
-             // Queue for realtime send and maintain short context only
-             unsentChunks.push(event.data);
-             recentHistory.push(event.data);
-             if (recentHistory.length > CONTEXT_CHUNKS) recentHistory.shift();
-             
-             // Show that we're actively receiving audio
-             const display = document.getElementById('live-transcript-content');
-             if (unsentChunks.length === 1) {
-               display.innerHTML = '<div class="typing-indicator" style="color: #0891b2;">🎵 Audio gedetecteerd, transcriptie start binnenkort...</div>';
-             }
-           } else if (event.data.size === 0) {
-             console.log('⚠️ Empty audio chunk received');
-           }
-         };
-         
-         mediaRecorder.onstop = handleRecordingStop;
-         
-         // Start recording with smaller chunks for faster transcription
-         mediaRecorder.start(CHUNK_MS); // 2-second chunks for faster response
-         
-         // Show recording overlay
-         document.getElementById('recording-overlay').classList.remove('hidden');
-         document.getElementById('whisper-btn').disabled = true;
-         
-         // Initialize live transcription display
-         updateLiveTranscriptionDisplay('');
-         
-         // Start real-time transcription interval - faster for immediate feedback  
-         realtimeInterval = setInterval(() => {
-           if (!recordingCancelled && mediaRecorder && mediaRecorder.state === 'recording') {
-             console.log(`🔄 Real-time interval tick - new chunks queued: ${unsentChunks.length}`);
-             sendRealtimeChunk();
-           } else {
-             console.log('⏹️ Recording stopped or cancelled, stopping real-time transcription');
-             if (realtimeInterval) {
-               clearInterval(realtimeInterval);
-               realtimeInterval = null;
-             }
-           }
-         }, REALTIME_INTERVAL_MS); // Every 2.5 seconds for faster response
-         
+          if (event.data.size > 0 && !recordingCancelled) {
+            console.log(`🎵 Audio chunk received: ${event.data.size} bytes (total chunks: ${realtimeChunks.length + 1})`);
+            audioChunks.push(event.data);  // For final batch transcription
+            realtimeChunks.push(event.data);  // For real-time transcription
+            
+            // Show that we're actively receiving audio
+            const display = document.getElementById('live-transcript-content');
+            if (realtimeChunks.length === 1) {
+              display.innerHTML = '<div class="typing-indicator" style="color: #0891b2;">🎵 Audio gedetecteerd, transcriptie start binnenkort...</div>';
+            }
+          } else if (event.data.size === 0) {
+            console.log('⚠️ Empty audio chunk received');
+          }
+        };
+        
+        mediaRecorder.onstop = handleRecordingStop;
+        
+        // Start recording with smaller chunks for faster transcription
+        mediaRecorder.start(2000); // 2-second chunks for faster response
+        
+        // Show recording overlay
+        document.getElementById('recording-overlay').classList.remove('hidden');
+        document.getElementById('whisper-btn').disabled = true;
+        
+        // Initialize live transcription display
+        updateLiveTranscriptionDisplay('');
+        
+        // Start real-time transcription interval - faster for immediate feedback  
+        realtimeInterval = setInterval(() => {
+          if (!recordingCancelled && mediaRecorder && mediaRecorder.state === 'recording') {
+            console.log(`🔄 Real-time interval tick - chunks available: ${realtimeChunks.length}`);
+            sendRealtimeChunk();
+          } else {
+            console.log('⏹️ Recording stopped or cancelled, stopping real-time transcription');
+            if (realtimeInterval) {
+              clearInterval(realtimeInterval);
+              realtimeInterval = null;
+            }
+          }
+        }, 2500); // Every 2.5 seconds for faster response
+        
        } catch (error) {
          console.error('Recording error:', error);
          alert('Kon microfoon niet starten. Controleer uw browserinstellingen.');
@@ -1213,7 +1195,7 @@
        showLoading(true);
        
        try {
-         const response = await fetch('https://dde338680bd1.ngrok-free.app/transcribe-audio', {
+         const response = await fetch('https://c0fce75a838e.ngrok-free.app/transcribe-audio', {
            method: 'POST',
            body: formData
          });
@@ -1315,7 +1297,7 @@
           updateTolkStatus('Verbinding maken…', 'bg-yellow-100 text-yellow-700');
 
           // 1) Fetch ephemeral token from backend
-          const sessionResp = await fetch('https://dde338680bd1.ngrok-free.app/session', { method: 'POST' });
+          const sessionResp = await fetch('https://c0fce75a838e.ngrok-free.app/session', { method: 'POST' });
           const sessionData = await sessionResp.json();
           if (!sessionResp.ok || sessionData.error) throw new Error(sessionData.error || 'Session error');
           const ephemeral = sessionData?.client_secret?.value;
