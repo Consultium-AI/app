@@ -800,7 +800,7 @@
       showLoading(true);
 
     try {
-        const response = await fetch('https://26e48db237ff.ngrok-free.app/generate-soep', {
+        const response = await fetch('https://19064cf6cbfe.ngrok-free.app/generate-soep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: promptText })
@@ -873,6 +873,7 @@
     let realtimeChunks = [];
     let realtimeInterval = null;
     let liveTranscriptionText = '';
+    let isSendingRealtime = false;
     
 
     // Real-time transcription during recording
@@ -882,22 +883,24 @@
         return;
       }
 
+      if (isSendingRealtime) return;
+
       try {
+        isSendingRealtime = true;
         // Check if we have enough chunks
         if (realtimeChunks.length === 0) {
           console.log('⏳ No chunks yet, waiting...');
           return;
         }
 
-        // Always use all available chunks for maximum context (increasing latency over time)
-        const chunksToSend = realtimeChunks.slice(); // Copy all chunks
+        // Send only the most recent ~20s to keep latency bounded
+        const chunksToSend = realtimeChunks.slice(-10);
         
         console.log(`📦 Preparing to send ${chunksToSend.length} chunks (total buffer: ${realtimeChunks.length})`);
         
-        // Create audio blob from all chunks
+        // Create audio blob from recent chunks
         const chunkBlob = new Blob(chunksToSend, { type: 'audio/webm' });
         
-        // More lenient size check - even small chunks might have speech
         if (chunkBlob.size < 100) { 
           console.log(`⚠️ Very small chunk (${chunkBlob.size} bytes), but sending anyway...`);
         }
@@ -905,10 +908,15 @@
         const formData = new FormData();
         formData.append('audio_chunk', chunkBlob, 'chunk.webm');
 
-        const response = await fetch('https://26e48db237ff.ngrok-free.app/realtime-transcribe', {
+        // Add request timeout to avoid backlog under bad networks
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const response = await fetch('https://19064cf6cbfe.ngrok-free.app/realtime-transcribe', {
           method: 'POST',
-          body: formData
+          body: formData,
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -925,9 +933,12 @@
             console.log(`📝 Raw transcription: "${newText}" (${newText.length} chars)`);
             console.log(`📊 Previous text length: ${liveTranscriptionText.length} chars`);
             
-            // Replace the entire transcript with the new complete one
-            liveTranscriptionText = newText;
-            updateLiveTranscriptionDisplay(liveTranscriptionText);
+            // Append only delta for smooth UI update
+            const delta = computeDelta(liveTranscriptionText, newText);
+            if (delta) {
+              liveTranscriptionText = newText;
+              updateLiveTranscriptionDisplay(liveTranscriptionText);
+            }
           } else {
             console.log(`⚠️ Empty transcription - server result:`, result);
             console.log(`📊 Current text: "${liveTranscriptionText}" (${liveTranscriptionText.length} chars)`);
@@ -937,16 +948,13 @@
           console.log('❌ Chunk processing failed:', result);
         }
 
-        // Smarter chunk management: keep recent chunks but don't let it grow infinitely
-        if (realtimeChunks.length > 30) { // Trim more frequently to avoid huge blobs
-          const oldLength = realtimeChunks.length;
-          realtimeChunks = realtimeChunks.slice(-15); // Keep last 15 chunks (~30 seconds)
-          console.log(`🧹 Trimmed chunks: ${oldLength} → ${realtimeChunks.length}`);
-        }
+        // Keep buffer small at all times (~24s)
+        realtimeChunks = realtimeChunks.slice(-12);
 
       } catch (error) {
         console.error('Real-time transcription error:', error);
-        // Don't stop recording on transcription errors - just continue
+      } finally {
+        isSendingRealtime = false;
       }
     }
 
@@ -1205,7 +1213,7 @@
        showLoading(true);
        
        try {
-         const response = await fetch('https://26e48db237ff.ngrok-free.app/transcribe-audio', {
+         const response = await fetch('https://19064cf6cbfe.ngrok-free.app/transcribe-audio', {
            method: 'POST',
            body: formData
          });
@@ -1308,7 +1316,7 @@
           updateTolkStatus('Verbinding maken…', 'bg-yellow-100 text-yellow-700');
 
           // 1) Fetch ephemeral token from backend
-          const sessionResp = await fetch('https://26e48db237ff.ngrok-free.app/session', { method: 'POST' });
+          const sessionResp = await fetch('https://19064cf6cbfe.ngrok-free.app/session', { method: 'POST' });
           const sessionData = await sessionResp.json();
           if (!sessionResp.ok || sessionData.error) throw new Error(sessionData.error || 'Session error');
           const ephemeral = sessionData?.client_secret?.value;
@@ -1489,7 +1497,7 @@
             const formData = new FormData();
             formData.append('file', blob, 'tolk-session.webm');
 
-            const trResp = await fetch('https://26e48db237ff.ngrok-free.app/transcribe-audio-raw', { method: 'POST', body: formData });
+            const trResp = await fetch('https://19064cf6cbfe.ngrok-free.app/transcribe-audio-raw', { method: 'POST', body: formData });
             const trJson = await trResp.json();
             if (!trResp.ok || trJson.error) { throw new Error(trJson.error || 'Transcriptie mislukt'); }
 
@@ -1497,7 +1505,7 @@
             if (!transcript) { throw new Error('Lege transcriptie ontvangen'); }
 
             // Genereer SOEP met dezelfde backend als SOEP‑pagina
-            const soepResp = await fetch('https://26e48db237ff.ngrok-free.app/generate-soep', {
+            const soepResp = await fetch('https://19064cf6cbfe.ngrok-free.app/generate-soep', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ prompt: transcript })
