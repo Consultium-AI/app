@@ -951,19 +951,7 @@
     }
 
     function formatSpeakerText(text) {
-      if (!text) {
-        return `<div class="live-transcript-text" style="word-wrap: break-word; white-space: pre-wrap; line-height: 1.6;">${text}</div>`;
-      }
-
-      // Normalize: ensure every 'Arts:' or 'Patiënt:' starts on a new line
-      // This fixes cases where the model returns labels inline within the same paragraph
-      text = text
-        .replace(/\s+(Arts:\s*)/g, '\n$1')
-        .replace(/\s+(Patiënt:\s*)/g, '\n$1')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-
-      if (!text.includes('Arts:') && !text.includes('Patiënt:')) {
+      if (!text || !text.includes('Arts:') && !text.includes('Patiënt:')) {
         // No speaker labels, return as plain text
         return `<div class="live-transcript-text" style="word-wrap: break-word; white-space: pre-wrap; line-height: 1.6;">${text}</div>`;
       }
