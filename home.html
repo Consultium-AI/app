@@ -336,9 +336,14 @@
       </div>
     </div>
     
-    <button id="soep-recording-btn" class="px-8 py-4 blue-gradient text-white text-xl font-semibold rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
-      SOEP
-    </button>
+    <div class="flex gap-4">
+      <button id="soep-recording-btn" class="px-8 py-4 blue-gradient text-white text-xl font-semibold rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+        SOEP
+      </button>
+      <button id="stop-translation-btn" class="px-8 py-4 bg-gray-200 text-gray-800 text-xl font-semibold rounded-full shadow hover:shadow transition-all duration-300">
+        Stop Vertaling
+      </button>
+    </div>
   </div>
 
   <!-- Main Content -->
@@ -623,6 +628,11 @@
           <canvas id="tolk-visualizer" class="w-full max-w-xl h-20 mx-auto mt-2"></canvas>
          <p class="text-sm text-gray-500 mt-4">Klik om spraak‑naar‑spraak vertaling te starten/stoppen</p>
          <audio id="tolk-remote-audio" autoplay class="hidden"></audio>
+        <div class="mt-6 flex items-center justify-center">
+          <button id="tolk-soep-btn" class="px-6 py-3 blue-gradient text-white rounded-lg font-semibold disabled:opacity-50" disabled>
+            SOEP
+          </button>
+        </div>
        </div>
     </div>
   </main>
@@ -1248,6 +1258,7 @@
     document.getElementById('whisper-btn').addEventListener('click', startRecording);
     document.getElementById('soep-recording-btn').addEventListener('click', stopRecording);
     document.getElementById('cancel-recording-btn').addEventListener('click', cancelRecording);
+    document.getElementById('stop-translation-btn').addEventListener('click', () => { try { stopRealtime(); } catch(_) {} });
     
          // Auto-expanding textarea
      const textarea = document.getElementById('text-input');
@@ -1344,6 +1355,18 @@
 
           isRealtimeActive = true;
           updateTolkStatus('Verbonden – spreek nu', 'bg-green-100 text-green-600');
+          try { document.getElementById('tolk-soep-btn').disabled = false; } catch(_) {}
+          // Start background recording for batch transcriptie parallel aan live tolk
+          try {
+            if (!audioStream) {
+              audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            }
+            audioChunks = [];
+            const options = MediaRecorder.isTypeSupported('audio/webm') ? { mimeType: 'audio/webm' } : undefined;
+            mediaRecorder = new MediaRecorder(audioStream, options);
+            mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) { audioChunks.push(e.data); } };
+            if (mediaRecorder.state !== 'recording') mediaRecorder.start(2500);
+          } catch (recErr) { console.warn('Kon achtergrondopname niet starten:', recErr); }
         } catch (err) {
           console.error('Realtime start error:', err);
           updateTolkStatus('Fout bij verbinden', 'bg-red-100 text-red-600');
@@ -1365,6 +1388,7 @@
           stopAiVisualizer();
           isRealtimeActive = false;
           updateTolkStatus('Niet verbonden', 'bg-gray-100 text-gray-600');
+          try { document.getElementById('tolk-soep-btn').disabled = true; } catch(_) {}
         } catch (_) {
           // ignore
         }
@@ -1427,7 +1451,82 @@
          });
          tolkBtn.addEventListener('contextmenu', function(e) { e.preventDefault(); });
        }
-    });
+
+      // SOEP finalize from Live Tolk
+      const tolkSoepBtn = document.getElementById('tolk-soep-btn');
+      if (tolkSoepBtn) {
+        tolkSoepBtn.addEventListener('click', async function() {
+          try {
+            // Stop live vertaling
+            await stopRealtime();
+
+            // Zet knop status
+            tolkSoepBtn.disabled = true;
+            showLoading(true);
+
+            // Stop achtergrondopname en wacht tot flush voltooid is
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+              await new Promise(resolve => {
+                try {
+                  mediaRecorder.onstop = () => resolve(null);
+                  mediaRecorder.stop();
+                } catch(_) { resolve(null); }
+              });
+            }
+
+            // Stop audio stream
+            if (audioStream) {
+             try { audioStream.getTracks().forEach(t => t.stop()); } catch(_) {}
+            }
+
+            // Upload batch audio en genereer SOEP
+            if (!audioChunks || audioChunks.length === 0) {
+              alert('Geen audio opgenomen voor SOEP.');
+              showLoading(false);
+              return;
+            }
+            const blob = new Blob(audioChunks, { type: 'audio/webm' });
+            const formData = new FormData();
+            formData.append('file', blob, 'tolk-session.webm');
+
+            const trResp = await fetch('https://5c639743ad00.ngrok-free.app/transcribe-audio-raw', { method: 'POST', body: formData });
+            const trJson = await trResp.json();
+            if (!trResp.ok || trJson.error) { throw new Error(trJson.error || 'Transcriptie mislukt'); }
+
+            const transcript = (trJson.transcription || '').trim();
+            if (!transcript) { throw new Error('Lege transcriptie ontvangen'); }
+
+            // Genereer SOEP met dezelfde backend als SOEP‑pagina
+            const soepResp = await fetch('https://5c639743ad00.ngrok-free.app/generate-soep', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ prompt: transcript })
+            });
+            const soepJson = await soepResp.json();
+            if (!soepResp.ok || soepJson.error) { throw new Error(soepJson.error || 'SOEP genereren mislukt'); }
+
+            // Vul SOEP tab met resultaat en switch erheen
+            ['s','o','e','p'].forEach(k => {
+              const el = document.getElementById(`${k}-content`);
+              if (el) el.innerHTML = formatContent(soepJson[k] || '');
+            });
+            document.getElementById('verslag-container')?.classList.remove('hidden');
+            switchTab('soep');
+            setTimeout(() => { document.getElementById('verslag-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+          } catch (e) {
+            console.error('SOEP via Live Tolk fout:', e);
+            alert('Kon SOEP niet genereren. Probeer opnieuw.');
+          } finally {
+            // Cleanup buffers voor volgende sessie
+            try { audioChunks = []; } catch(_) {}
+            try { realtimeChunks = []; } catch(_) {}
+            try { mediaRecorder = null; } catch(_) {}
+            try { audioStream = null; } catch(_) {}
+            showLoading(false);
+          }
+        });
+      }
+     });
   </script>
 </body>
 </html>
