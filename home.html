@@ -808,46 +808,33 @@
     let liveTranscriptionText = '';
 
     // Real-time transcription during recording
-    let isSendingRealtime = false;
-    let lastSentChunkIndex = 0;
-    
     async function sendRealtimeChunk() {
       if (recordingCancelled) {
         console.log('🛑 Recording cancelled, stopping transcription');
         return;
       }
 
-      // Prevent concurrent sends
-      if (isSendingRealtime) {
-        console.log('⏳ Previous send still in progress, skipping...');
-        return;
-      }
-
       try {
-        // Check if we have new chunks since last send
-        if (realtimeChunks.length === 0 || realtimeChunks.length <= lastSentChunkIndex) {
-          console.log('⏳ No new chunks to send');
+        // Check if we have enough chunks
+        if (realtimeChunks.length === 0) {
+          console.log('⏳ No chunks yet, waiting...');
           return;
         }
 
-        isSendingRealtime = true;
-
-        // Send only recent chunks (last 4-6 chunks = 8-12 seconds)
-        const recentChunks = realtimeChunks.slice(-6);
+        // Always use all available chunks for maximum context
+        const chunksToSend = realtimeChunks.slice(); // Copy all chunks
         
-        console.log(`📦 Sending ${recentChunks.length} recent chunks (from total ${realtimeChunks.length})`);
+        console.log(`📦 Preparing to send ${chunksToSend.length} chunks (total buffer: ${realtimeChunks.length})`);
         
-        // Create audio blob from recent chunks only
-        const chunkBlob = new Blob(recentChunks, { type: 'audio/webm' });
+        // Create audio blob from all chunks
+        const chunkBlob = new Blob(chunksToSend, { type: 'audio/webm' });
         
-        // Skip very small chunks
-        if (chunkBlob.size < 1000) { 
-          console.log(`⚠️ Chunk too small (${chunkBlob.size} bytes), skipping...`);
-          isSendingRealtime = false;
-          return;
+        // More lenient size check - even small chunks might have speech
+        if (chunkBlob.size < 100) { 
+          console.log(`⚠️ Very small chunk (${chunkBlob.size} bytes), but sending anyway...`);
         }
 
-        console.log(`📤 Sending chunk (${chunkBlob.size} bytes)`);
+        console.log(`📤 Sending chunk (${chunkBlob.size} bytes, ${chunksToSend.length} chunks)`);
 
         const formData = new FormData();
         formData.append('audio_chunk', chunkBlob, 'chunk.webm');
@@ -862,41 +849,57 @@
         }
 
         const result = await response.json();
-        console.log(`📨 Server response:`, result);
+        console.log(`📨 Server response status: ${response.status}, result:`, result);
         
-        if (result.status === 'success' && result.transcription && result.transcription.trim()) {
-          const newText = result.transcription.trim();
-          console.log(`📝 New transcription: "${newText}" (${newText.length} chars)`);
+        if (result.status === 'success') {
+          console.log(`🔍 Full server result:`, JSON.stringify(result, null, 2));
           
-          // Append to existing text (since we're sending partial chunks)
-          if (liveTranscriptionText && !newText.startsWith(liveTranscriptionText.substring(0, 50))) {
-            // New content doesn't include previous text, so append
-            liveTranscriptionText = liveTranscriptionText + ' ' + newText;
+          if (result.transcription && result.transcription.trim()) {
+            const newText = result.transcription.trim();
+            console.log(`📝 Raw transcription: "${newText}" (${newText.length} chars)`);
+            console.log(`📊 Previous text length: ${liveTranscriptionText.length} chars`);
+            
+            // Check if this appears to be speaker-formatted content
+            const hasSpeakerLabels = newText.includes('Arts:') || newText.includes('Patiënt:');
+            
+            // REPLACEMENT STRATEGY: Each chunk contains the complete transcription
+            // Only update if this transcription is longer/different than what we have
+            if (newText.length > liveTranscriptionText.length || newText !== liveTranscriptionText) {
+              console.log(`✅ REPLACING with complete transcription: "${newText.substring(0, 100)}..."`);
+              
+              if (hasSpeakerLabels) {
+                console.log(`🎭 Speaker-formatted content detected! Arts/Patiënt labels found.`);
+              }
+              
+              // REPLACE the entire transcription with the new complete one
+              liveTranscriptionText = newText;
+              
+              updateLiveTranscriptionDisplay(liveTranscriptionText);
+            } else {
+              console.log(`🔄 Keeping existing transcription (same or shorter)`);
+              // Still update display to show we're active with timestamp
+              updateLiveTranscriptionDisplay(liveTranscriptionText);
+            }
           } else {
-            // New content includes previous text, so replace
-            liveTranscriptionText = newText;
+            console.log(`⚠️ Empty transcription - server result:`, result);
+            console.log(`📊 Current text: "${liveTranscriptionText}" (${liveTranscriptionText.length} chars)`);
+            // Update display to show we're still listening (but keep existing text)
+            updateLiveTranscriptionDisplay(liveTranscriptionText || '🎤 Luister mee...');
           }
-          
-          updateLiveTranscriptionDisplay(liveTranscriptionText);
-          
-          // Update last sent index
-          lastSentChunkIndex = realtimeChunks.length;
-        } else if (result.transcription === '') {
-          console.log(`⚠️ Empty transcription received`);
+        } else if (result.status === 'skipped' || result.status === 'error') {
+          console.log('❌ Chunk processing failed:', result);
         }
 
-        // Trim old chunks more aggressively
-        if (realtimeChunks.length > 20) {
+        // Smarter chunk management: keep recent chunks but don't let it grow infinitely
+        if (realtimeChunks.length > 30) { // Trim more frequently to avoid huge blobs
           const oldLength = realtimeChunks.length;
-          realtimeChunks = realtimeChunks.slice(-10); // Keep only last 10 chunks
-          lastSentChunkIndex = Math.max(0, lastSentChunkIndex - (oldLength - realtimeChunks.length));
+          realtimeChunks = realtimeChunks.slice(-15); // Keep last 15 chunks (~30 seconds)
           console.log(`🧹 Trimmed chunks: ${oldLength} → ${realtimeChunks.length}`);
         }
 
       } catch (error) {
         console.error('Real-time transcription error:', error);
-      } finally {
-        isSendingRealtime = false;
+        // Don't stop recording on transcription errors - just continue
       }
     }
 
@@ -990,8 +993,6 @@
          // Reset cancellation flag at start
          recordingCancelled = false;
          liveTranscriptionText = '';
-         isSendingRealtime = false;
-         lastSentChunkIndex = 0;
          
          audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
          audioChunks = [];
