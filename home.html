@@ -733,7 +733,7 @@
       showLoading(true);
 
     try {
-        const response = await fetch('https://ccb041032b4e.ngrok-free.app/generate-soep', {
+        const response = await fetch('https://9566ef1b65d4.ngrok-free.app/generate-soep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: promptText })
@@ -839,7 +839,7 @@
         const formData = new FormData();
         formData.append('audio_chunk', chunkBlob, 'chunk.webm');
 
-        const response = await fetch('https://ccb041032b4e.ngrok-free.app/realtime-transcribe', {
+        const response = await fetch('https://9566ef1b65d4.ngrok-free.app/realtime-transcribe', {
           method: 'POST',
           body: formData
         });
@@ -940,55 +940,7 @@
         .join('');
     }
 
-    // Typing animation variables
-    let currentTypingText = '';
-    let isTyping = false;
-    let typingSpeed = 15; // milliseconds per character (faster for smooth effect)
-
-    function typeText(element, text, callback) {
-      if (isTyping) return; // Prevent multiple typing animations
-      
-      isTyping = true;
-      element.innerHTML = '';
-      let index = 0;
-      
-      function type() {
-        if (index < text.length) {
-          const currentChar = text.charAt(index);
-          const displayText = text.substring(0, index + 1);
-          element.innerHTML = displayText + '<span class="typing-cursor">|</span>';
-          
-          index++;
-          
-          // Slightly slower for spaces and punctuation to make it feel more natural
-          const delay = (currentChar === ' ' || currentChar === '.' || currentChar === ',' || currentChar === '?' || currentChar === '!') 
-            ? typingSpeed * 3 
-            : typingSpeed;
-          
-          setTimeout(type, delay);
-        } else {
-          // Remove cursor when done and add a brief pause
-          element.innerHTML = text;
-          setTimeout(() => {
-            isTyping = false;
-            if (callback) callback();
-          }, 300); // Small pause before applying formatting
-        }
-      }
-      
-      type();
-    }
-
-    function formatSpeakerTextForTyping(text) {
-      // For typing animation, we need plain text that can be animated
-      // We'll apply speaker formatting after typing is complete
-      if (!text || !text.includes('Arts:') && !text.includes('Patiënt:')) {
-        return text;
-      }
-      
-      // Return plain text version for typing, speaker formatting will be applied after
-      return text;
-    }
+    // Removed typing animation for live transcription for instant updates
 
     function updateLiveTranscriptionDisplay(text) {
       const display = document.getElementById('live-transcript-content');
@@ -996,66 +948,21 @@
       const currentTime = new Date().toLocaleTimeString();
       
       if (text && text.trim() && text.trim() !== '🎤 Luister mee...') {
-        // Add expanding class for longer texts
         if (text.length > 100) {
           container.classList.add('expanding');
         }
         
         const wordCount = text.split(' ').length;
-        
-        // Check if this is new text that should be typed
-        if (text !== currentTypingText && text.length > currentTypingText.length) {
-          currentTypingText = text;
-          
-          // Create container for typing animation
-          const typingContainer = document.createElement('div');
-          typingContainer.style.wordWrap = 'break-word';
-          
-          // Clear display and add typing container
-          display.innerHTML = '';
-          display.appendChild(typingContainer);
-          
-          // Add status indicator immediately
-          const statusDiv = document.createElement('div');
-          statusDiv.className = 'typing-indicator';
-          statusDiv.style.cssText = 'margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(8, 145, 178, 0.2); color: #0891b2; font-size: 0.9rem;';
-          statusDiv.innerHTML = `
+        const formattedText = formatSpeakerText(text);
+        display.innerHTML = `
+          <div style="word-wrap: break-word;">${formattedText}</div>
+          <div class="typing-indicator" style="margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(8, 145, 178, 0.2); color: #0891b2; font-size: 0.9rem;">
             <span style="animation: pulse 1.5s infinite;">● Live transcriptie actief - ${wordCount} woorden</span>
             <span style="float: right; opacity: 0.7;">${currentTime}</span>
-          `;
-          display.appendChild(statusDiv);
-          
-          // Start typing animation with plain text first
-          const plainText = text.replace(/Arts:/g, '\n\nArts:').replace(/Patiënt:/g, '\n\nPatiënt:');
-          
-          typeText(typingContainer, plainText, () => {
-            // After typing is complete, apply speaker formatting
-            const formattedText = formatSpeakerText(text);
-            typingContainer.innerHTML = formattedText;
-            typingContainer.classList.add('text-reveal');
-            
-            // Scroll to bottom after formatting
-            setTimeout(() => {
-              container.scrollTop = container.scrollHeight;
-            }, 100);
-          });
-          
-        } else {
-          // Same text, just update without typing animation
-          const formattedText = formatSpeakerText(text);
-          display.innerHTML = `
-            <div style="word-wrap: break-word;">${formattedText}</div>
-            <div class="typing-indicator" style="margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(8, 145, 178, 0.2); color: #0891b2; font-size: 0.9rem;">
-              <span style="animation: pulse 1.5s infinite;">● Live transcriptie actief - ${wordCount} woorden</span>
-              <span style="float: right; opacity: 0.7;">${currentTime}</span>
-            </div>
-          `;
-        }
-        
+          </div>
+        `;
       } else {
-        // Show waiting state
         container.classList.remove('expanding');
-        currentTypingText = '';
         display.innerHTML = `
           <div class="typing-indicator" style="color: #0891b2; font-size: 1.1rem;">
             <span style="animation: pulse 1.5s infinite;">🎤 Luister mee - begin met spreken...</span>
@@ -1064,14 +971,9 @@
         `;
       }
       
-      // Immediate scroll to bottom
       container.scrollTop = container.scrollHeight;
-      
-      // Force scroll again after a small delay to ensure content is fully rendered
       setTimeout(() => {
         container.scrollTop = container.scrollHeight;
-        
-        // Keep the container in view if it's getting long
         if (container.scrollHeight > window.innerHeight * 0.5) {
           const rect = container.getBoundingClientRect();
           if (rect.bottom > window.innerHeight * 0.9) {
@@ -1080,10 +982,9 @@
         }
       }, 100);
       
-      // Update progress indicator
-      const wordCount = text ? text.split(' ').length : 0;
-      if (wordCount > 0) {
-        console.log(`📊 Transcriptie progress: ${wordCount} woorden, ${text.length} characters`);
+      const wordCountLog = text ? text.split(' ').length : 0;
+      if (wordCountLog > 0) {
+        console.log(`📊 Transcriptie progress: ${wordCountLog} woorden, ${text.length} characters`);
       }
     }
 
@@ -1092,8 +993,6 @@
          // Reset cancellation flag at start
          recordingCancelled = false;
          liveTranscriptionText = '';
-         currentTypingText = '';
-         isTyping = false;
          
          audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
          audioChunks = [];
@@ -1187,8 +1086,6 @@
        audioChunks = [];
        realtimeChunks = [];
        liveTranscriptionText = '';
-       currentTypingText = '';
-       isTyping = false;
        
        document.getElementById('recording-overlay').classList.add('hidden');
        document.getElementById('whisper-btn').disabled = false;
@@ -1233,7 +1130,7 @@
        showLoading(true);
        
        try {
-         const response = await fetch('https://ccb041032b4e.ngrok-free.app/transcribe-audio', {
+         const response = await fetch('https://9566ef1b65d4.ngrok-free.app/transcribe-audio', {
            method: 'POST',
            body: formData
          });
@@ -1362,7 +1259,7 @@
          const language2 = document.getElementById('language-2').value;
          
          // Send to AI for intelligent language detection and translation
-         const response = await fetch('https://ccb041032b4e.ngrok-free.app/intelligent-translate', {
+         const response = await fetch('https://9566ef1b65d4.ngrok-free.app/intelligent-translate', {
            method: 'POST',
            headers: {
              'Content-Type': 'application/json',
