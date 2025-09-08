@@ -733,7 +733,7 @@
       showLoading(true);
 
     try {
-        const response = await fetch('https://5474c4314671.ngrok-free.app/generate-soep', {
+        const response = await fetch('https://35e5080092c1.ngrok-free.app/generate-soep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: promptText })
@@ -828,8 +828,8 @@
           return;
         }
 
-        // Send only the last 3 chunks to keep requests small and fresh
-        const chunksToSend = realtimeChunks.slice(-3);
+        // Send last 3-4 chunks (6-8 seconds) for context, but clear buffer after sending
+        const chunksToSend = realtimeChunks.slice(-4);
         
         console.log(`📦 Preparing to send ${chunksToSend.length} chunks (total buffer: ${realtimeChunks.length})`);
         
@@ -846,7 +846,7 @@
         const formData = new FormData();
         formData.append('audio_chunk', chunkBlob, 'chunk.webm');
 
-        const response = await fetch('https://5474c4314671.ngrok-free.app/realtime-transcribe', {
+        const response = await fetch('https://35e5080092c1.ngrok-free.app/realtime-transcribe', {
           method: 'POST',
           body: formData
         });
@@ -897,11 +897,11 @@
           console.log('❌ Chunk processing failed:', result);
         }
 
-        // Smarter chunk management: keep recent chunks but don't let it grow infinitely
-        if (realtimeChunks.length > 30) { // Trim more frequently to avoid huge blobs
+        // Clear processed chunks to prevent accumulation, keep only last 2 for next send
+        if (realtimeChunks.length > 6) {
           const oldLength = realtimeChunks.length;
-          realtimeChunks = realtimeChunks.slice(-15); // Keep last 15 chunks (~30 seconds)
-          console.log(`🧹 Trimmed chunks: ${oldLength} → ${realtimeChunks.length}`);
+          realtimeChunks = realtimeChunks.slice(-2); // Keep only last 2 chunks
+          console.log(`🧹 Cleared processed chunks: ${oldLength} → ${realtimeChunks.length}`);
         }
 
       } catch (error) {
@@ -1043,11 +1043,16 @@
          
          // Start real-time transcription interval - faster for immediate feedback  
          realtimeInterval = setInterval(() => {
-           if (!recordingCancelled && mediaRecorder && mediaRecorder.state === 'recording') {
-             console.log(`🔄 Real-time interval tick - chunks available: ${realtimeChunks.length}`);
-             sendRealtimeChunk();
+           if (!recordingCancelled && mediaRecorder) {
+             console.log(`🔄 Real-time interval tick - mediaRecorder.state: ${mediaRecorder.state}, chunks: ${realtimeChunks.length}`);
+             if (mediaRecorder.state === 'recording') {
+               sendRealtimeChunk();
+             } else {
+               console.log(`⚠️ MediaRecorder state changed to: ${mediaRecorder.state}`);
+               // Don't stop the interval - keep trying in case recording resumes
+             }
            } else {
-             console.log('⏹️ Recording stopped or cancelled, stopping real-time transcription');
+             console.log('⏹️ Recording cancelled or mediaRecorder null, stopping transcription');
              if (realtimeInterval) {
                clearInterval(realtimeInterval);
                realtimeInterval = null;
@@ -1139,7 +1144,7 @@
        showLoading(true);
        
        try {
-         const response = await fetch('https://5474c4314671.ngrok-free.app/transcribe-audio', {
+         const response = await fetch('https://35e5080092c1.ngrok-free.app/transcribe-audio', {
            method: 'POST',
            body: formData
          });
@@ -1268,7 +1273,7 @@
          const language2 = document.getElementById('language-2').value;
          
          // Send to AI for intelligent language detection and translation
-         const response = await fetch('https://5474c4314671.ngrok-free.app/intelligent-translate', {
+         const response = await fetch('https://35e5080092c1.ngrok-free.app/intelligent-translate', {
            method: 'POST',
            headers: {
              'Content-Type': 'application/json',
