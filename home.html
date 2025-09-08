@@ -821,8 +821,8 @@
           return;
         }
 
-        // Always use all available chunks for maximum context
-        const chunksToSend = realtimeChunks.slice(); // Copy all chunks
+        // Send only the last 3 chunks for recent context
+        const chunksToSend = realtimeChunks.slice(-3);
         
         console.log(`📦 Preparing to send ${chunksToSend.length} chunks (total buffer: ${realtimeChunks.length})`);
         
