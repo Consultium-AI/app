@@ -891,6 +891,7 @@
             if (shouldUpdate) {
               currentBlockText = newText;
               chunksInCurrentBlock = Math.min(chunksInCurrentBlock + 1, MAX_BLOCK_CHUNKS);
+              // Render frozen blocks + current live-updating block
               liveTranscriptionText = [...frozenBlocks, currentBlockText].filter(Boolean).join('\n\n');
               updateLiveTranscriptionDisplay(liveTranscriptionText);
 
@@ -899,8 +900,10 @@
                 frozenBlocks.push(currentBlockText);
                 currentBlockText = '';
                 chunksInCurrentBlock = 0;
-                // Reset send buffer for next block
+                // Reset send buffer and header for next block so ffmpeg sees a fresh file
                 realtimeChunks = [];
+                webmHeaderSaved = false;
+                webmHeaderBlob = null;
               }
             } else {
               console.log(`🔄 Keeping existing block text (same or shorter)`);
@@ -1020,6 +1023,8 @@
          frozenBlocks = [];
          currentBlockText = '';
          chunksInCurrentBlock = 0;
+         webmHeaderSaved = false;
+         webmHeaderBlob = null;
          
          audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
          audioChunks = [];
@@ -1062,7 +1067,7 @@
          mediaRecorder.onstop = handleRecordingStop;
          
          // Start recording with smaller chunks for faster transcription
-         mediaRecorder.start(1000); // 1-second chunks for faster response
+         mediaRecorder.start(2500); // 2.5-second chunks for faster response
          
          // Show recording overlay
          document.getElementById('recording-overlay').classList.remove('hidden');
