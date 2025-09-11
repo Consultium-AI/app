@@ -841,7 +841,8 @@
         console.log(`📦 Sending ${chunksToSend.length} recent chunks (buffer: ${realtimeChunks.length})`);
         
         // Create audio blob from recent chunks with explicit mime
-        const chunkBlob = new Blob(chunksToSend, { type: 'audio/webm;codecs=opus' });
+        const parts = webmHeaderSaved ? [webmHeaderBlob, ...chunksToSend] : chunksToSend;
+        const chunkBlob = new Blob(parts, { type: 'audio/webm;codecs=opus' });
         // Cap size defensively to avoid Colab/ngrok limits
         const MAX_BYTES = 2_000_000; // ~2MB
         if (chunkBlob.size > MAX_BYTES) {
@@ -900,10 +901,8 @@
                 frozenBlocks.push(currentBlockText);
                 currentBlockText = '';
                 chunksInCurrentBlock = 0;
-                // Reset send buffer and header for next block so ffmpeg sees a fresh file
+                // Reset send buffer for next block
                 realtimeChunks = [];
-                webmHeaderSaved = false;
-                webmHeaderBlob = null;
               }
             } else {
               console.log(`🔄 Keeping existing block text (same or shorter)`);
