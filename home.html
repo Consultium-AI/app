@@ -821,22 +821,17 @@
         return;
       }
 
+      isSendingRealtime = true;
       try {
         // Check if we have enough chunks
         if (realtimeChunks.length === 0) {
           console.log('⏳ No chunks yet, waiting...');
           return;
         }
-        isSendingRealtime = true;
-        
+
         // Send cumulative chunks within the current block (up to 10)
-        const maxChunks = MAX_BLOCK_CHUNKS;
-        if (realtimeChunks.length > maxChunks) {
-          const before = realtimeChunks.length;
-          realtimeChunks = realtimeChunks.slice(0, maxChunks);
-          console.log(`🧹 Trimmed working buffer to ${maxChunks} (was ${before})`);
-        }
-        const chunksToSend = realtimeChunks.slice();
+        const maxChunks = 8; // rolling window
+        const chunksToSend = realtimeChunks.slice(-maxChunks);
         
         console.log(`📦 Sending ${chunksToSend.length} recent chunks (buffer: ${realtimeChunks.length})`);
         
@@ -887,33 +882,18 @@
               console.log(`🎭 Speaker-formatted content detected! Arts/Patiënt labels found.`);
             }
 
-            // Update current 10-chunk block cumulatively
-            const shouldUpdate = newText.length > currentBlockText.length || newText !== currentBlockText;
-            if (shouldUpdate) {
-              currentBlockText = newText;
-              chunksInCurrentBlock = Math.min(chunksInCurrentBlock + 1, MAX_BLOCK_CHUNKS);
-              // Render frozen blocks + current live-updating block
-              liveTranscriptionText = [...frozenBlocks, currentBlockText].filter(Boolean).join('\n\n');
+            // Continuously growing transcript (no freezing)
+            if (newText.length > liveTranscriptionText.length || newText !== liveTranscriptionText) {
+              liveTranscriptionText = newText;
               updateLiveTranscriptionDisplay(liveTranscriptionText);
-
-              if (chunksInCurrentBlock >= MAX_BLOCK_CHUNKS) {
-                console.log('🧊 Freezing block of 10 chunks');
-                frozenBlocks.push(currentBlockText);
-                currentBlockText = '';
-                chunksInCurrentBlock = 0;
-                // Reset send buffer for next block
-                realtimeChunks = [];
-              }
             } else {
-              console.log(`🔄 Keeping existing block text (same or shorter)`);
-              liveTranscriptionText = [...frozenBlocks, currentBlockText].filter(Boolean).join('\n\n');
               updateLiveTranscriptionDisplay(liveTranscriptionText);
             }
           } else {
             console.log(`⚠️ Empty transcription - server result:`, result);
             console.log(`📊 Current text: "${liveTranscriptionText}" (${liveTranscriptionText.length} chars)`);
             // Update display to show we're still listening (but keep existing text)
-            liveTranscriptionText = [...frozenBlocks, currentBlockText].filter(Boolean).join('\n\n') || '🎤 Luister mee...';
+            liveTranscriptionText = liveTranscriptionText || '🎤 Luister mee...';
             updateLiveTranscriptionDisplay(liveTranscriptionText);
           }
         } else if (result.status === 'skipped' || result.status === 'error') {
@@ -1018,10 +998,7 @@
          // Reset cancellation flag at start
          recordingCancelled = false;
          liveTranscriptionText = '';
-         // Reset stacking state for a new session
-         frozenBlocks = [];
-         currentBlockText = '';
-         chunksInCurrentBlock = 0;
+         // No freezing state
          webmHeaderSaved = false;
          webmHeaderBlob = null;
          
