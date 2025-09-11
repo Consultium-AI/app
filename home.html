@@ -806,6 +806,7 @@
     let realtimeChunks = [];
     let realtimeInterval = null;
     let liveTranscriptionText = '';
+    let lastServerTranscription = '';
     let webmHeaderBlob = null;
     let webmHeaderSaved = false;
     let isSendingRealtime = false;
@@ -886,8 +887,8 @@
             // Check if this appears to be speaker-formatted content
             const hasSpeakerLabels = newText.includes('Arts:') || newText.includes('Patiënt:');
             
-            // APPEND STRATEGY: keep previous text fixed, append only new delta
-            const delta = computeAppendDelta(liveTranscriptionText, newText);
+            // APPEND STRATEGY: append only the part that is new vs the last server text
+            const delta = computeDeltaFromLastServer(lastServerTranscription, newText);
             if (delta) {
               if (hasSpeakerLabels) {
                 console.log(`🎭 Speaker-formatted content detected.`);
@@ -900,6 +901,7 @@
               console.log(`🔄 No new content to append`);
               updateLiveTranscriptionDisplay(liveTranscriptionText);
             }
+            lastServerTranscription = newText;
           } else {
             console.log(`⚠️ Empty transcription - server result:`, result);
             console.log(`📊 Current text: "${liveTranscriptionText}" (${liveTranscriptionText.length} chars)`);
@@ -925,18 +927,33 @@
       }
     }
 
-    // Merge helper – appends only the non-overlapping suffix of incoming text
-    function computeAppendDelta(existing, incoming) {
-      if (!incoming) return '';
-      if (!existing) return incoming;
-      const maxOverlap = Math.min(existing.length, incoming.length);
+    // Compute new delta against last full server transcription (robust against repeats)
+    function computeDeltaFromLastServer(previousServer, currentServer) {
+      if (!currentServer) return '';
+      if (!previousServer) return currentServer;
+      if (currentServer === previousServer) return '';
+      // If previous server text is a prefix of current, take the suffix
+      if (currentServer.startsWith(previousServer)) {
+        return currentServer.slice(previousServer.length);
+      }
+      // Otherwise, find the longest overlap where previousServer's suffix matches currentServer's prefix
+      const maxOverlap = Math.min(previousServer.length, currentServer.length);
       for (let i = maxOverlap; i > 0; i--) {
-        if (existing.slice(-i) === incoming.slice(0, i)) {
-          return incoming.slice(i);
+        if (previousServer.slice(-i) === currentServer.slice(0, i)) {
+          return currentServer.slice(i);
         }
       }
-      if (existing.includes(incoming)) return '';
-      return incoming;
+      // If the new server text is contained within the previous (e.g., shorter retry), append nothing
+      if (previousServer.includes(currentServer)) {
+        return '';
+      }
+      // Fallback: if unrelated (rare), append currentServer but guard against duplicating the last line
+      const prevLines = previousServer.trim().split(/\n+/);
+      const lastLine = prevLines[prevLines.length - 1] || '';
+      if (lastLine && currentServer.startsWith(lastLine)) {
+        return currentServer.slice(lastLine.length);
+      }
+      return currentServer;
     }
 
     function formatSpeakerText(text) {
@@ -1512,3 +1529,4 @@
   </script>
 </body>
 </html>
+
