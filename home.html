@@ -895,7 +895,10 @@
                 frozenBlocks.push(currentBlockText);
                 currentBlockText = '';
                 chunksInCurrentBlock = 0;
-                // Do NOT reset audio/header; keep capture continuous
+                // Reset send buffer and header for next block so ffmpeg sees a fresh file
+                realtimeChunks = [];
+                webmHeaderSaved = false;
+                webmHeaderBlob = null;
               }
             } else {
               console.log(`🔄 Keeping existing block text (same or shorter)`);
