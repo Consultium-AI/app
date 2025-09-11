@@ -821,14 +821,14 @@
         return;
       }
 
-      isSendingRealtime = true;
       try {
         // Check if we have enough chunks
         if (realtimeChunks.length === 0) {
           console.log('⏳ No chunks yet, waiting...');
           return;
         }
-
+        isSendingRealtime = true;
+        
         // Send cumulative chunks within the current block (up to 10)
         const maxChunks = MAX_BLOCK_CHUNKS;
         if (realtimeChunks.length > maxChunks) {
