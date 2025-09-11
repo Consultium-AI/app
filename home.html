@@ -886,22 +886,18 @@
             // Check if this appears to be speaker-formatted content
             const hasSpeakerLabels = newText.includes('Arts:') || newText.includes('Patiënt:');
             
-            // REPLACEMENT STRATEGY: Each chunk contains the complete transcription
-            // Only update if this transcription is longer/different than what we have
-            if (newText.length > liveTranscriptionText.length || newText !== liveTranscriptionText) {
-              console.log(`✅ REPLACING with complete transcription: "${newText.substring(0, 100)}..."`);
-              
+            // APPEND STRATEGY: keep previous text fixed, append only new delta
+            const delta = computeAppendDelta(liveTranscriptionText, newText);
+            if (delta) {
               if (hasSpeakerLabels) {
-                console.log(`🎭 Speaker-formatted content detected! Arts/Patiënt labels found.`);
+                console.log(`🎭 Speaker-formatted content detected.`);
               }
-              
-              // REPLACE the entire transcription with the new complete one
-              liveTranscriptionText = newText;
-              
+              const needsGap = liveTranscriptionText && !liveTranscriptionText.endsWith('\n') && !delta.startsWith('\n');
+              liveTranscriptionText += needsGap ? ('\n' + delta) : delta;
               updateLiveTranscriptionDisplay(liveTranscriptionText);
+              console.log(`➕ Appended ${delta.length} chars (total ${liveTranscriptionText.length})`);
             } else {
-              console.log(`🔄 Keeping existing transcription (same or shorter)`);
-              // Still update display to show we're active with timestamp
+              console.log(`🔄 No new content to append`);
               updateLiveTranscriptionDisplay(liveTranscriptionText);
             }
           } else {
@@ -927,6 +923,20 @@
       } finally {
         isSendingRealtime = false;
       }
+    }
+
+    // Merge helper – appends only the non-overlapping suffix of incoming text
+    function computeAppendDelta(existing, incoming) {
+      if (!incoming) return '';
+      if (!existing) return incoming;
+      const maxOverlap = Math.min(existing.length, incoming.length);
+      for (let i = maxOverlap; i > 0; i--) {
+        if (existing.slice(-i) === incoming.slice(0, i)) {
+          return incoming.slice(i);
+        }
+      }
+      if (existing.includes(incoming)) return '';
+      return incoming;
     }
 
     function formatSpeakerText(text) {
