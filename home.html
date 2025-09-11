@@ -806,6 +806,8 @@
     let realtimeChunks = [];
     let realtimeInterval = null;
     let liveTranscriptionText = '';
+    let webmHeaderBlob = null;
+    let webmHeaderSaved = false;
     let isSendingRealtime = false;
 
     // Real-time transcription during recording
@@ -835,8 +837,10 @@
         
         console.log(`📦 Sending ${chunksToSend.length} recent chunks (buffer: ${realtimeChunks.length})`);
         
-        // Create audio blob from recent chunks with explicit mime
-        const chunkBlob = new Blob(chunksToSend, { type: 'audio/webm;codecs=opus' });
+        // Create audio blob from recent chunks with explicit mime.
+        // Prepend saved WebM header to ensure EBML header is present.
+        const parts = webmHeaderSaved ? [webmHeaderBlob, ...chunksToSend] : chunksToSend;
+        const chunkBlob = new Blob(parts, { type: 'audio/webm;codecs=opus' });
         // Cap size defensively to avoid Colab/ngrok limits
         const MAX_BYTES = 2_000_000; // ~2MB
         if (chunkBlob.size > MAX_BYTES) {
@@ -1020,14 +1024,26 @@
          audioChunks = [];
          realtimeChunks = [];
          
-         const options = MediaRecorder.isTypeSupported('audio/webm') 
-           ? { mimeType: 'audio/webm' } 
-           : { mimeType: 'audio/mp4' };
+         let options;
+         if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+           options = { mimeType: 'audio/webm;codecs=opus' };
+         } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+           options = { mimeType: 'audio/webm' };
+         } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+           options = { mimeType: 'audio/ogg;codecs=opus' };
+         } else {
+           options = {};
+         }
            
          mediaRecorder = new MediaRecorder(audioStream, options);
          
          mediaRecorder.ondataavailable = event => {
            if (event.data.size > 0 && !recordingCancelled) {
+             if (!webmHeaderSaved) {
+               webmHeaderBlob = event.data;
+               webmHeaderSaved = true;
+               console.log('🧩 Saved WebM header chunk');
+             }
              console.log(`🎵 Audio chunk received: ${event.data.size} bytes (total chunks: ${realtimeChunks.length + 1})`);
              audioChunks.push(event.data);  // For final batch transcription
              realtimeChunks.push(event.data);  // For real-time transcription
