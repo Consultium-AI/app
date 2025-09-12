@@ -809,11 +809,6 @@
     let frozenText = '';
     let liveBlockText = '';
     let blockChunkCount = 0;
-    const MAX_CHUNKS = 10; // one block = 10 chunks
-    let blockChunks = [];
-    let blockShouldRestart = false;
-    let rollingRestart = false;
-    let recorderOptions = {};
     let webmHeaderBlob = null;
     let webmHeaderSaved = false;
     let isSendingRealtime = false;
@@ -827,20 +822,34 @@
 
       isSendingRealtime = true;
       try {
-        // Check if we have enough chunks in the current block
-        if (blockChunks.length === 0) {
+        // Check if we have enough chunks
+        if (!webmHeaderSaved || realtimeChunks.length === 0) {
           console.log('⏳ No chunks yet, waiting...');
           return;
         }
 
-        // Send the whole current block so the first chunk carries the EBML header for this block
-        const chunksToSend = blockChunks.slice();
-        console.log(`📦 Sending current block: ${chunksToSend.length} chunks (count=${blockChunkCount})`);
-        const chunkBlob = new Blob(chunksToSend, { type: 'audio/webm;codecs=opus' });
+        // Only send the most recent small window of chunks (keep requests small)
+        const maxChunks = 10; // ~20 seconds if 2s chunks
+        // Trim buffer aggressively before sending to avoid growth
+        if (realtimeChunks.length > maxChunks * 2) {
+          const oldLen = realtimeChunks.length;
+          realtimeChunks = realtimeChunks.slice(-maxChunks * 2);
+          console.log(`🧹 Pre-trim buffer: ${oldLen} → ${realtimeChunks.length}`);
+        }
+        const chunksToSend = realtimeChunks.slice(-maxChunks);
+        
+        console.log(`📦 Sending ${chunksToSend.length} recent chunks (buffer: ${realtimeChunks.length})`);
+        
+        // Create audio blob from recent chunks with explicit mime.
+        // Prepend saved WebM header to ensure EBML header is present.
+        const parts = webmHeaderSaved ? [webmHeaderBlob, ...chunksToSend] : chunksToSend;
+        const chunkBlob = new Blob(parts, { type: 'audio/webm;codecs=opus' });
         // Cap size defensively to avoid Colab/ngrok limits
         const MAX_BYTES = 2_000_000; // ~2MB
         if (chunkBlob.size > MAX_BYTES) {
           console.warn(`🚫 Chunk too large (${chunkBlob.size} bytes). Skipping this tick.`);
+          // Clear buffer to prevent unbounded growth
+          realtimeChunks = realtimeChunks.slice(-maxChunks);
           return;
         }
         
@@ -863,7 +872,8 @@
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        // Keep using the same blockChunks until we commit the block
+        // Clear or trim buffer after sending to avoid cumulative growth
+        realtimeChunks = realtimeChunks.slice(-maxChunks);
 
         const result = await response.json();
         console.log(`📨 Server response status: ${response.status}, result:`, result);
@@ -879,27 +889,19 @@
             // Check if this appears to be speaker-formatted content
             const hasSpeakerLabels = newText.includes('Arts:') || newText.includes('Patiënt:');
             
-            // Update live block and if full, commit and roll to new block
+            // Update live block and commit when reaching full block size
             liveBlockText = newText;
-            if (blockChunkCount >= MAX_CHUNKS) {
+            blockChunkCount = Math.min(maxChunks, blockChunkCount + 1);
+            if (blockChunkCount >= maxChunks) {
+              // Commit current live block to frozen text
               const commitText = liveBlockText.trim();
               if (commitText) {
                 frozenText = frozenText ? (frozenText + '\n' + commitText) : commitText;
               }
               liveBlockText = '';
-              // Prepare next block
-              blockChunks = [];
               blockChunkCount = 0;
-              // Restart recorder to obtain fresh header in the next block
-              try {
-                if (mediaRecorder && mediaRecorder.state === 'recording') {
-                  rollingRestart = true;
-                  mediaRecorder.stop();
-                }
-              } catch (e) {
-                console.warn('Recorder rolling restart failed:', e);
-                rollingRestart = false;
-              }
+              // Start fresh audio buffer for next block
+              realtimeChunks = [];
             }
             // Display frozen + current live block
             liveTranscriptionText = frozenText ? (frozenText + (liveBlockText ? ('\n' + liveBlockText) : '')) : (liveBlockText || '');
@@ -914,7 +916,12 @@
           console.log('❌ Chunk processing failed:', result);
         }
 
-        // No post-trim; blockChunks is bounded by MAX_CHUNKS
+        // Keep only a bounded buffer (~16 seconds)
+        if (realtimeChunks.length > maxChunks * 2) {
+          const oldLength = realtimeChunks.length;
+          realtimeChunks = realtimeChunks.slice(-maxChunks * 2);
+          console.log(`🧹 Post-trim buffer: ${oldLength} → ${realtimeChunks.length}`);
+        }
 
       } catch (error) {
         console.error('Real-time transcription error:', error);
@@ -1038,6 +1045,7 @@
                webmHeaderBlob = event.data;
                webmHeaderSaved = true;
                console.log('🧩 Saved WebM header chunk');
+               return;
              }
              console.log(`🎵 Audio chunk received: ${event.data.size} bytes (total chunks: ${realtimeChunks.length + 1})`);
              audioChunks.push(event.data);  // For final batch transcription
