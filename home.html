@@ -812,6 +812,61 @@
     let isSendingRealtime = false;
     let isRollingRestart = false;
     let recorderOptions = null;
+    let pendingRecorder = null;
+    let pendingHeaderBlob = null;
+    let pendingHeaderSaved = false;
+    let inBlockTransition = false;
+
+    function startPendingRecorder() {
+      if (pendingRecorder) return;
+      try {
+        pendingHeaderBlob = null;
+        pendingHeaderSaved = false;
+        // Start second recorder on the same stream to overlap
+        pendingRecorder = new MediaRecorder(audioStream, recorderOptions || {});
+        pendingRecorder.ondataavailable = event => {
+          if (event.data.size > 0 && !recordingCancelled) {
+            if (!pendingHeaderSaved) {
+              pendingHeaderBlob = event.data;
+              pendingHeaderSaved = true;
+              console.log('🧩 Pending recorder saved header');
+              // Switch to pending recorder now that we have a fresh header
+              switchToPendingRecorder();
+              return;
+            }
+            // After switch, global header is already set, so push audio
+            console.log(`🎵 Pending audio chunk: ${event.data.size} bytes`);
+            audioChunks.push(event.data);
+            realtimeChunks.push(event.data);
+          }
+        };
+        pendingRecorder.start(1000);
+        console.log('⏳ Pending recorder started (awaiting header)...');
+      } catch (e) {
+        console.warn('Failed to start pending recorder:', e);
+      }
+    }
+
+    function switchToPendingRecorder() {
+      try {
+        if (!pendingRecorder || !pendingHeaderSaved) return;
+        // Set new global header
+        webmHeaderBlob = pendingHeaderBlob;
+        webmHeaderSaved = true;
+        // Reset live buffer/UI for new block (keep frozen visible)
+        realtimeChunks = [];
+        liveTranscriptionText = '';
+        updateLiveTranscriptionDisplay(frozenBlocksText);
+        inBlockTransition = false;
+        // Stop old recorder and promote pending to active
+        try { mediaRecorder && mediaRecorder.stop(); } catch {}
+        mediaRecorder = pendingRecorder;
+        pendingRecorder = null;
+        console.log('✅ Switched to pending recorder with fresh header');
+      } catch (e) {
+        console.warn('Switch to pending recorder failed:', e);
+      }
+    }
 
     // Real-time transcription during recording
     async function sendRealtimeChunk() {
@@ -913,8 +968,9 @@
         }
         
         // If we've accumulated a full block (10 chunks), do a rolling restart to guarantee a fresh header
-        if (realtimeChunks.length >= maxChunks) {
-          console.log('🔁 Completed block of 10 chunks. Freezing first block and rolling restart...');
+        if (realtimeChunks.length >= maxChunks && !inBlockTransition) {
+          console.log('🔁 Completed block of 10 chunks. Freezing and starting pending recorder...');
+          inBlockTransition = true;
           // Freeze current block text at the top
           if (liveTranscriptionText && liveTranscriptionText.trim()) {
             frozenBlocksText = frozenBlocksText
@@ -922,10 +978,8 @@
               : liveTranscriptionText.trim();
           }
           updateLiveTranscriptionDisplay(frozenBlocksText);
-
-          // Rolling restart to guarantee fresh header for next block
-          isRollingRestart = true;
-          try { mediaRecorder.stop(); } catch (e) { console.warn('Stop during rolling restart failed:', e); }
+          // Start overlapping recorder to avoid gaps; switch when header arrives
+          startPendingRecorder();
         }
 
       } catch (error) {
@@ -1067,45 +1121,13 @@
          };
          
          mediaRecorder.onstop = async () => {
-          if (isRollingRestart && !recordingCancelled) {
-            isRollingRestart = false;
-            try {
-              webmHeaderSaved = false;
-              webmHeaderBlob = null;
-              realtimeChunks = [];
-              // Keep frozenBlocksText visible; clear live text for next block
-              liveTranscriptionText = '';
-              updateLiveTranscriptionDisplay(frozenBlocksText);
-
-              mediaRecorder = new MediaRecorder(audioStream, options);
-              mediaRecorder.ondataavailable = event => {
-                if (event.data.size > 0 && !recordingCancelled) {
-                  if (!webmHeaderSaved) {
-                    webmHeaderBlob = event.data;
-                    webmHeaderSaved = true;
-                    console.log('🧩 Saved WebM header chunk');
-                    return;
-                  }
-                  console.log(`🎵 Audio chunk received: ${event.data.size} bytes (total chunks: ${realtimeChunks.length + 1})`);
-                  audioChunks.push(event.data);
-                  realtimeChunks.push(event.data);
-                  const display = document.getElementById('live-transcript-content');
-                  if (realtimeChunks.length === 1) {
-                    display.innerHTML = '<div class="typing-indicator" style="color: #0891b2;">🎵 Audio gedetecteerd, transcriptie start binnenkort...</div>';
-                  }
-                } else if (event.data.size === 0) {
-                  console.log('⚠️ Empty audio chunk received');
-                }
-              };
-              mediaRecorder.onstop = arguments.callee;
-              mediaRecorder.start(2000);
-              console.log('✅ Rolling restart complete: new segment started');
-              return;
-            } catch (err) {
-              console.warn('Rolling restart failed, retrying startRecording():', err);
-              await startRecording();
-              return;
-            }
+          if (recordingCancelled) {
+            await handleRecordingStop();
+            return;
+          }
+          if (inBlockTransition) {
+            console.log('⏳ Primary recorder stopped; pending recorder continues');
+            return;
           }
           await handleRecordingStop();
         };
