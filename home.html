@@ -809,6 +809,26 @@
     let webmHeaderBlob = null;
     let webmHeaderSaved = false;
     let isSendingRealtime = false;
+    // Post-processing window state
+    const PP_WINDOW_SIZE = 10;
+    let ppFrozenText = '';
+    let ppWindowStartIndex = 1;
+    let ppWindowChunks = [];
+    let lastTranscriptionText = '';
+
+    function longestCommonPrefix(a, b) {
+      a = a || '';
+      b = b || '';
+      const n = Math.min(a.length, b.length);
+      let i = 0;
+      while (i < n && a.charCodeAt(i) === b.charCodeAt(i)) i++;
+      return i;
+    }
+
+    function computeDelta(prev, curr) {
+      const l = longestCommonPrefix(prev, curr);
+      return curr.slice(l).trimStart();
+    }
 
     // Real-time transcription during recording
     async function sendRealtimeChunk() {
@@ -886,24 +906,66 @@
             // Check if this appears to be speaker-formatted content
             const hasSpeakerLabels = newText.includes('Arts:') || newText.includes('Patiënt:');
             
-            // REPLACEMENT STRATEGY: Each chunk contains the complete transcription
-            // Only update if this transcription is longer/different than what we have
-            if (newText.length > liveTranscriptionText.length || newText !== liveTranscriptionText) {
-              console.log(`✅ REPLACING with complete transcription: "${newText.substring(0, 100)}..."`);
-              
-              if (hasSpeakerLabels) {
-                console.log(`🎭 Speaker-formatted content detected! Arts/Patiënt labels found.`);
+            // Compute delta for post-processing windowing
+            let delta = computeDelta(lastTranscriptionText, newText);
+            if (!delta && newText !== lastTranscriptionText) {
+              // If major rewrite happened, fallback to using the whole text as a delta
+              delta = newText;
+              // And reset window state to avoid mixing contexts
+              ppFrozenText = '';
+              ppWindowStartIndex = 1;
+              ppWindowChunks = [];
+            }
+
+            if (delta) {
+              const nextIndex = ppWindowStartIndex + ppWindowChunks.length;
+              ppWindowChunks.push({ index: nextIndex, text: delta });
+
+              try {
+                const ppPayload = {
+                  window_size: PP_WINDOW_SIZE,
+                  frozen_text: ppFrozenText,
+                  window_start_index: ppWindowStartIndex,
+                  window_chunks: ppWindowChunks
+                };
+                const ppRes = await fetch('https://d600e5ca55b4.ngrok-free.app/postprocess-transcript', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(ppPayload)
+                });
+                if (ppRes.ok) {
+                  const pp = await ppRes.json();
+                  if (pp.commit_window && pp.frozen_block) {
+                    // Append frozen block and start a new window
+                    ppFrozenText = (ppFrozenText ? ppFrozenText + '\n' : '') + (pp.frozen_block.text || '');
+                    ppWindowStartIndex = pp.frozen_block.range.end + 1;
+                    ppWindowChunks = [];
+                  }
+                  // Update display with full_text
+                  if (pp.full_text !== undefined) {
+                    liveTranscriptionText = pp.full_text;
+                    updateLiveTranscriptionDisplay(liveTranscriptionText);
+                  } else {
+                    // Fallback to raw text
+                    liveTranscriptionText = newText;
+                    updateLiveTranscriptionDisplay(liveTranscriptionText);
+                  }
+                } else {
+                  // If postprocess fails, fallback to raw text
+                  liveTranscriptionText = newText;
+                  updateLiveTranscriptionDisplay(liveTranscriptionText);
+                }
+              } catch (ppErr) {
+                console.warn('Postprocess failed:', ppErr);
+                liveTranscriptionText = newText;
+                updateLiveTranscriptionDisplay(liveTranscriptionText);
               }
-              
-              // REPLACE the entire transcription with the new complete one
-              liveTranscriptionText = newText;
-              
-              updateLiveTranscriptionDisplay(liveTranscriptionText);
             } else {
-              console.log(`🔄 Keeping existing transcription (same or shorter)`);
-              // Still update display to show we're active with timestamp
+              // No new delta; still refresh UI
               updateLiveTranscriptionDisplay(liveTranscriptionText);
             }
+
+            lastTranscriptionText = newText;
           } else {
             console.log(`⚠️ Empty transcription - server result:`, result);
             console.log(`📊 Current text: "${liveTranscriptionText}" (${liveTranscriptionText.length} chars)`);
@@ -1019,6 +1081,11 @@
          // Reset cancellation flag at start
          recordingCancelled = false;
          liveTranscriptionText = '';
+         // Reset post-processing window state
+         ppFrozenText = '';
+         ppWindowStartIndex = 1;
+         ppWindowChunks = [];
+         lastTranscriptionText = '';
          
          audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
          audioChunks = [];
