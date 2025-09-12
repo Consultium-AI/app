@@ -806,6 +806,7 @@
     let realtimeChunks = [];
     let realtimeInterval = null;
     let liveTranscriptionText = '';
+    let frozenBlocksText = '';
     let webmHeaderBlob = null;
     let webmHeaderSaved = false;
     let isSendingRealtime = false;
@@ -888,9 +889,12 @@
             // Check if this appears to be speaker-formatted content
             const hasSpeakerLabels = newText.includes('Arts:') || newText.includes('Patiënt:');
             
-            // Display only current block transcription (no freezing)
-            liveTranscriptionText = newText;
-            updateLiveTranscriptionDisplay(liveTranscriptionText);
+            // Display frozen blocks + current block transcription
+            const combinedText = frozenBlocksText
+              ? (frozenBlocksText + (newText ? ('\n' + newText) : ''))
+              : (newText || '');
+            liveTranscriptionText = combinedText;
+            updateLiveTranscriptionDisplay(combinedText);
           } else {
             console.log(`⚠️ Empty transcription - server result:`, result);
             console.log(`📊 Current text: "${liveTranscriptionText}" (${liveTranscriptionText.length} chars)`);
@@ -910,7 +914,16 @@
         
         // If we've accumulated a full block (10 chunks), do a rolling restart to guarantee a fresh header
         if (realtimeChunks.length >= maxChunks) {
-          console.log('🔁 Completed block of 10 chunks. Rolling restart MediaRecorder for fresh header...');
+          console.log('🔁 Completed block of 10 chunks. Freezing first block and rolling restart...');
+          // Freeze current block text at the top
+          if (liveTranscriptionText && liveTranscriptionText.trim()) {
+            frozenBlocksText = frozenBlocksText
+              ? (frozenBlocksText + '\n' + liveTranscriptionText.trim())
+              : liveTranscriptionText.trim();
+          }
+          updateLiveTranscriptionDisplay(frozenBlocksText);
+
+          // Rolling restart to guarantee fresh header for next block
           isRollingRestart = true;
           try { mediaRecorder.stop(); } catch (e) { console.warn('Stop during rolling restart failed:', e); }
         }
@@ -1060,8 +1073,9 @@
               webmHeaderSaved = false;
               webmHeaderBlob = null;
               realtimeChunks = [];
+              // Keep frozenBlocksText visible; clear live text for next block
               liveTranscriptionText = '';
-              updateLiveTranscriptionDisplay('');
+              updateLiveTranscriptionDisplay(frozenBlocksText);
 
               mediaRecorder = new MediaRecorder(audioStream, options);
               mediaRecorder.ondataavailable = event => {
