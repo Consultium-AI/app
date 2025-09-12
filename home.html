@@ -809,6 +809,8 @@
     let webmHeaderBlob = null;
     let webmHeaderSaved = false;
     let isSendingRealtime = false;
+    let isRollingRestart = false;
+    let recorderOptions = null;
 
     // Real-time transcription during recording
     async function sendRealtimeChunk() {
@@ -905,18 +907,12 @@
           realtimeChunks = realtimeChunks.slice(-maxChunks * 2);
           console.log(`🧹 Post-trim buffer: ${oldLength} → ${realtimeChunks.length}`);
         }
-
-        // If we've accumulated a full block (10 chunks), start a fresh block
+        
+        // If we've accumulated a full block (10 chunks), do a rolling restart to guarantee a fresh header
         if (realtimeChunks.length >= maxChunks) {
-          console.log('🔁 Completed block of 10 chunks. Starting a new block...');
-          // Reset header so the next ondataavailable becomes the new header
-          webmHeaderSaved = false;
-          webmHeaderBlob = null;
-          // Clear audio buffer for the next block
-          realtimeChunks = [];
-          // Reset UI to fresh state until new text arrives
-          liveTranscriptionText = '';
-          updateLiveTranscriptionDisplay('');
+          console.log('🔁 Completed block of 10 chunks. Rolling restart MediaRecorder for fresh header...');
+          isRollingRestart = true;
+          try { mediaRecorder.stop(); } catch (e) { console.warn('Stop during rolling restart failed:', e); }
         }
 
       } catch (error) {
@@ -989,7 +985,7 @@
         container.classList.remove('expanding');
         display.innerHTML = `
           <div class="typing-indicator" style="color: #0891b2; font-size: 1.1rem;">
-            <span style="animation: pulse 1.5s infinite;">🎤 Luister mee - begin met spreken...</span>
+            <span style="animation: pulse 1.5s infinite;"> begin met spreken...</span>
             <div style="margin-top: 4px; font-size: 0.9rem; opacity: 0.7;">${currentTime}</div>
           </div>
         `;
@@ -1057,7 +1053,48 @@
            }
          };
          
-         mediaRecorder.onstop = handleRecordingStop;
+         mediaRecorder.onstop = async () => {
+          if (isRollingRestart && !recordingCancelled) {
+            isRollingRestart = false;
+            try {
+              webmHeaderSaved = false;
+              webmHeaderBlob = null;
+              realtimeChunks = [];
+              liveTranscriptionText = '';
+              updateLiveTranscriptionDisplay('');
+
+              mediaRecorder = new MediaRecorder(audioStream, options);
+              mediaRecorder.ondataavailable = event => {
+                if (event.data.size > 0 && !recordingCancelled) {
+                  if (!webmHeaderSaved) {
+                    webmHeaderBlob = event.data;
+                    webmHeaderSaved = true;
+                    console.log('🧩 Saved WebM header chunk');
+                    return;
+                  }
+                  console.log(`🎵 Audio chunk received: ${event.data.size} bytes (total chunks: ${realtimeChunks.length + 1})`);
+                  audioChunks.push(event.data);
+                  realtimeChunks.push(event.data);
+                  const display = document.getElementById('live-transcript-content');
+                  if (realtimeChunks.length === 1) {
+                    display.innerHTML = '<div class="typing-indicator" style="color: #0891b2;">🎵 Audio gedetecteerd, transcriptie start binnenkort...</div>';
+                  }
+                } else if (event.data.size === 0) {
+                  console.log('⚠️ Empty audio chunk received');
+                }
+              };
+              mediaRecorder.onstop = arguments.callee;
+              mediaRecorder.start(2000);
+              console.log('✅ Rolling restart complete: new segment started');
+              return;
+            } catch (err) {
+              console.warn('Rolling restart failed, retrying startRecording():', err);
+              await startRecording();
+              return;
+            }
+          }
+          await handleRecordingStop();
+        };
          
          // Start recording with smaller chunks for faster transcription
          mediaRecorder.start(2000); // 1-second chunks for faster response
