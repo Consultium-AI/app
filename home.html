@@ -733,7 +733,7 @@
       showLoading(true);
 
     try {
-        const response = await fetch('https://d66cc797e0c2.ngrok-free.app/generate-soep', {
+        const response = await fetch('https://c179920015c9.ngrok-free.app/generate-soep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: promptText })
@@ -817,6 +817,11 @@
     let pendingHeaderSaved = false;
     let inBlockTransition = false;
     let currentRecordingChunks = [];
+    // Continuous archive recorder for batch (single, valid WebM across session)
+    let archiveRecorder = null;
+    let archiveChunks = [];
+    let archiveHeaderBlob = null;
+    let archiveHeaderSaved = false;
 
     function startPendingRecorder() {
       if (pendingRecorder) return;
@@ -920,7 +925,7 @@
         const formData = new FormData();
         formData.append('audio_chunk', chunkBlob, 'chunk.webm');
 
-        const response = await fetch('https://d66cc797e0c2.ngrok-free.app/realtime-transcribe', {
+        const response = await fetch('https://c179920015c9.ngrok-free.app/realtime-transcribe', {
           method: 'POST',
           body: formData
         });
@@ -1100,6 +1105,29 @@
            
          mediaRecorder = new MediaRecorder(audioStream, options);
          
+         // Start continuous archive recorder (separate) to maintain a valid WebM for batch
+         try {
+           archiveChunks = [];
+           archiveHeaderBlob = null;
+           archiveHeaderSaved = false;
+           archiveRecorder = new MediaRecorder(audioStream, options);
+           archiveRecorder.ondataavailable = e => {
+             if (e.data && e.data.size > 0) {
+               if (!archiveHeaderSaved) {
+                 archiveHeaderBlob = e.data;
+                 archiveHeaderSaved = true;
+                 console.log('🗂️ Archive header saved');
+               } else {
+                 archiveChunks.push(e.data);
+               }
+             }
+           };
+           archiveRecorder.start(2000);
+           console.log('🗂️ Archive recorder started');
+         } catch (archErr) {
+           console.warn('Archive recorder failed:', archErr);
+         }
+         
          mediaRecorder.ondataavailable = event => {
            if (event.data.size > 0 && !recordingCancelled) {
              if (!webmHeaderSaved) {
@@ -1243,7 +1271,7 @@
        showLoading(true);
        
        try {
-         const response = await fetch('https://d66cc797e0c2.ngrok-free.app/transcribe-audio', {
+         const response = await fetch('https://c179920015c9.ngrok-free.app/transcribe-audio', {
            method: 'POST',
            body: formData
          });
@@ -1372,7 +1400,7 @@
          const language2 = document.getElementById('language-2').value;
          
          // Send to AI for intelligent language detection and translation
-         const response = await fetch('https://d66cc797e0c2.ngrok-free.app/intelligent-translate', {
+         const response = await fetch('https://c179920015c9.ngrok-free.app/intelligent-translate', {
            method: 'POST',
            headers: {
              'Content-Type': 'application/json',
