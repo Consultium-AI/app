@@ -806,9 +806,6 @@
     let realtimeChunks = [];
     let realtimeInterval = null;
     let liveTranscriptionText = '';
-    let frozenText = '';
-    let liveBlockText = '';
-    let blockChunkCount = 0;
     let webmHeaderBlob = null;
     let webmHeaderSaved = false;
     let isSendingRealtime = false;
@@ -889,22 +886,8 @@
             // Check if this appears to be speaker-formatted content
             const hasSpeakerLabels = newText.includes('Arts:') || newText.includes('Patiënt:');
             
-            // Update live block and commit when reaching full block size
-            liveBlockText = newText;
-            blockChunkCount = Math.min(maxChunks, blockChunkCount + 1);
-            if (blockChunkCount >= maxChunks) {
-              // Commit current live block to frozen text
-              const commitText = liveBlockText.trim();
-              if (commitText) {
-                frozenText = frozenText ? (frozenText + '\n' + commitText) : commitText;
-              }
-              liveBlockText = '';
-              blockChunkCount = 0;
-              // Start fresh audio buffer for next block
-              realtimeChunks = [];
-            }
-            // Display frozen + current live block
-            liveTranscriptionText = frozenText ? (frozenText + (liveBlockText ? ('\n' + liveBlockText) : '')) : (liveBlockText || '');
+            // Display only current block transcription (no freezing)
+            liveTranscriptionText = newText;
             updateLiveTranscriptionDisplay(liveTranscriptionText);
           } else {
             console.log(`⚠️ Empty transcription - server result:`, result);
@@ -921,6 +904,19 @@
           const oldLength = realtimeChunks.length;
           realtimeChunks = realtimeChunks.slice(-maxChunks * 2);
           console.log(`🧹 Post-trim buffer: ${oldLength} → ${realtimeChunks.length}`);
+        }
+
+        // If we've accumulated a full block (10 chunks), start a fresh block
+        if (realtimeChunks.length >= maxChunks) {
+          console.log('🔁 Completed block of 10 chunks. Starting a new block...');
+          // Reset header so the next ondataavailable becomes the new header
+          webmHeaderSaved = false;
+          webmHeaderBlob = null;
+          // Clear audio buffer for the next block
+          realtimeChunks = [];
+          // Reset UI to fresh state until new text arrives
+          liveTranscriptionText = '';
+          updateLiveTranscriptionDisplay('');
         }
 
       } catch (error) {
