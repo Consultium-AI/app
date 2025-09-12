@@ -806,6 +806,9 @@
     let realtimeChunks = [];
     let realtimeInterval = null;
     let liveTranscriptionText = '';
+    let frozenText = '';
+    let liveBlockText = '';
+    let blockChunkCount = 0;
     let webmHeaderBlob = null;
     let webmHeaderSaved = false;
     let isSendingRealtime = false;
@@ -886,24 +889,21 @@
             // Check if this appears to be speaker-formatted content
             const hasSpeakerLabels = newText.includes('Arts:') || newText.includes('Patiënt:');
             
-            // REPLACEMENT STRATEGY: Each chunk contains the complete transcription
-            // Only update if this transcription is longer/different than what we have
-            if (newText.length > liveTranscriptionText.length || newText !== liveTranscriptionText) {
-              console.log(`✅ REPLACING with complete transcription: "${newText.substring(0, 100)}..."`);
-              
-              if (hasSpeakerLabels) {
-                console.log(`🎭 Speaker-formatted content detected! Arts/Patiënt labels found.`);
+            // Update live block and commit when reaching full block size
+            liveBlockText = newText;
+            blockChunkCount = Math.min(maxChunks, blockChunkCount + 1);
+            if (blockChunkCount >= maxChunks) {
+              // Commit current live block to frozen text
+              const commitText = liveBlockText.trim();
+              if (commitText) {
+                frozenText = frozenText ? (frozenText + '\n' + commitText) : commitText;
               }
-              
-              // REPLACE the entire transcription with the new complete one
-              liveTranscriptionText = newText;
-              
-              updateLiveTranscriptionDisplay(liveTranscriptionText);
-            } else {
-              console.log(`🔄 Keeping existing transcription (same or shorter)`);
-              // Still update display to show we're active with timestamp
-              updateLiveTranscriptionDisplay(liveTranscriptionText);
+              liveBlockText = '';
+              blockChunkCount = 0;
             }
+            // Display frozen + current live block
+            liveTranscriptionText = frozenText ? (frozenText + (liveBlockText ? ('\n' + liveBlockText) : '')) : (liveBlockText || '');
+            updateLiveTranscriptionDisplay(liveTranscriptionText);
           } else {
             console.log(`⚠️ Empty transcription - server result:`, result);
             console.log(`📊 Current text: "${liveTranscriptionText}" (${liveTranscriptionText.length} chars)`);
