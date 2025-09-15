@@ -153,7 +153,7 @@
     /* Live transcription styling */
     #live-transcription-display {
       min-height: 120px;
-      max-height: 80vh; /* Very large max height */
+      max-height: 420px; /* Cap height to keep box from growing too large */
       overflow-y: auto;
       overflow-x: hidden;
       background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
@@ -165,7 +165,7 @@
       animation: live-pulse 2s ease-in-out infinite;
       transition: all 0.3s ease;
       scroll-behavior: smooth;
-      resize: vertical; /* Allow manual resizing */
+      resize: none; /* Prevent manual growth beyond cap */
     }
 
     /* Auto-expanding behavior */
@@ -1061,7 +1061,7 @@
          mediaRecorder.onstop = handleRecordingStop;
          
          // Start recording with smaller chunks for faster transcription
-         mediaRecorder.start(1500); // 1-second chunks for faster response
+         mediaRecorder.start(2000); // 1-second chunks for faster response
          
          // Show recording overlay
          document.getElementById('recording-overlay').classList.remove('hidden');
