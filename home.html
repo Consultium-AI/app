@@ -1061,7 +1061,7 @@
          mediaRecorder.onstop = handleRecordingStop;
          
          // Start recording with smaller chunks for faster transcription
-         mediaRecorder.start(2000); // 1-second chunks for faster response
+         mediaRecorder.start(2000); // 2-second chunks for faster response
          
          // Show recording overlay
          document.getElementById('recording-overlay').classList.remove('hidden');
@@ -1082,7 +1082,7 @@
                realtimeInterval = null;
              }
            }
-         }, 1500); // Every 1.5 seconds for faster response
+         }, 2000); // Every 2 seconds for faster response
          
        } catch (error) {
          console.error('Recording error:', error);
