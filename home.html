@@ -153,7 +153,7 @@
     /* Live transcription styling */
     #live-transcription-display {
       min-height: 120px;
-      max-height: 420px; /* Cap height to keep box from growing too large */
+      max-height: 80vh; /* Very large max height */
       overflow-y: auto;
       overflow-x: hidden;
       background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
@@ -165,7 +165,7 @@
       animation: live-pulse 2s ease-in-out infinite;
       transition: all 0.3s ease;
       scroll-behavior: smooth;
-      resize: none; /* Prevent manual growth beyond cap */
+      resize: vertical; /* Allow manual resizing */
     }
 
     /* Auto-expanding behavior */
@@ -733,7 +733,7 @@
       showLoading(true);
 
     try {
-        const response = await fetch('https://6f1468a0a99f.ngrok-free.app/generate-soep', {
+        const response = await fetch('https://3d07579c93c2.ngrok-free.app/generate-soep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: promptText })
@@ -800,14 +800,15 @@
     }
 
     // 🚀 NEW: Enhanced Recording functionality with REAL-TIME transcription
-    let mediaRecorder = null;
+    // Dual recorders: one for realtime streaming, one for batch-quality processing
+    let mediaRecorderRealtime = null;
+    let mediaRecorderBatch = null;
     let audioStream = null;
-    let audioChunks = [];
+    let batchChunks = [];
     let realtimeChunks = [];
     let realtimeInterval = null;
     let liveTranscriptionText = '';
-    let webmHeaderBlob = null;
-    let webmHeaderSaved = false;
+    // No special WebM header handling for realtime chunks
     let isSendingRealtime = false;
 
     // Real-time transcription during recording
@@ -838,9 +839,8 @@
         console.log(`📦 Sending ${chunksToSend.length} recent chunks (buffer: ${realtimeChunks.length})`);
         
         // Create audio blob from recent chunks with explicit mime.
-        // Prepend saved WebM header to ensure EBML header is present.
-        const parts = webmHeaderSaved ? [webmHeaderBlob, ...chunksToSend] : chunksToSend;
-        const chunkBlob = new Blob(parts, { type: 'audio/webm;codecs=opus' });
+        // Always send only the last N chunks as-is (no header prepend)
+        const chunkBlob = new Blob(chunksToSend, { type: 'audio/webm;codecs=opus' });
         // Cap size defensively to avoid Colab/ngrok limits
         const MAX_BYTES = 2_000_000; // ~2MB
         if (chunkBlob.size > MAX_BYTES) {
@@ -860,7 +860,7 @@
         const formData = new FormData();
         formData.append('audio_chunk', chunkBlob, 'chunk.webm');
 
-        const response = await fetch('https://6f1468a0a99f.ngrok-free.app/realtime-transcribe', {
+        const response = await fetch('https://3d07579c93c2.ngrok-free.app/realtime-transcribe', {
           method: 'POST',
           body: formData
         });
@@ -1021,7 +1021,7 @@
          liveTranscriptionText = '';
          
          audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-         audioChunks = [];
+         batchChunks = [];
          realtimeChunks = [];
          
          let options;
@@ -1035,33 +1035,41 @@
            options = {};
          }
            
-         mediaRecorder = new MediaRecorder(audioStream, options);
-         
-         mediaRecorder.ondataavailable = event => {
+         // Create separate recorders
+         mediaRecorderRealtime = new MediaRecorder(audioStream, options);
+         mediaRecorderBatch = new MediaRecorder(audioStream, options);
+
+         // Realtime recorder handler
+         mediaRecorderRealtime.ondataavailable = event => {
            if (event.data.size > 0 && !recordingCancelled) {
-             if (!webmHeaderSaved) {
-               webmHeaderBlob = event.data;
-               webmHeaderSaved = true;
-               console.log('🧩 Saved WebM header chunk');
+             console.log(`🎵 RT chunk: ${event.data.size} bytes (buffer: ${realtimeChunks.length + 1})`);
+             realtimeChunks.push(event.data);
+             // Keep only last 10 chunks in buffer immediately for consistent windowing
+             const MAX_RT_CHUNKS = 10;
+             if (realtimeChunks.length > MAX_RT_CHUNKS) {
+               realtimeChunks = realtimeChunks.slice(-MAX_RT_CHUNKS);
              }
-             console.log(`🎵 Audio chunk received: ${event.data.size} bytes (total chunks: ${realtimeChunks.length + 1})`);
-             audioChunks.push(event.data);  // For final batch transcription
-             realtimeChunks.push(event.data);  // For real-time transcription
-             
-             // Show that we're actively receiving audio
              const display = document.getElementById('live-transcript-content');
              if (realtimeChunks.length === 1) {
                display.innerHTML = '<div class="typing-indicator" style="color: #0891b2;">🎵 Audio gedetecteerd, transcriptie start binnenkort...</div>';
              }
-           } else if (event.data.size === 0) {
-             console.log('⚠️ Empty audio chunk received');
            }
          };
-         
-         mediaRecorder.onstop = handleRecordingStop;
-         
-         // Start recording with smaller chunks for faster transcription
-         mediaRecorder.start(2000); // 2-second chunks for faster response
+
+         // Batch recorder handler
+         mediaRecorderBatch.ondataavailable = event => {
+           if (event.data.size > 0 && !recordingCancelled) {
+             console.log(`📦 Batch chunk: ${event.data.size} bytes (buffer: ${batchChunks.length + 1})`);
+             batchChunks.push(event.data);
+           }
+         };
+
+         // Only batch recorder triggers final processing
+         mediaRecorderBatch.onstop = handleRecordingStop;
+
+         // Start both recorders
+         mediaRecorderRealtime.start(1500); // frequent chunks for realtime
+         mediaRecorderBatch.start(5000); // coarser chunks for memory safety
          
          // Show recording overlay
          document.getElementById('recording-overlay').classList.remove('hidden');
@@ -1072,7 +1080,7 @@
          
          // Start real-time transcription interval - faster for immediate feedback  
          realtimeInterval = setInterval(() => {
-           if (!recordingCancelled && mediaRecorder && mediaRecorder.state === 'recording') {
+          if (!recordingCancelled && mediaRecorderRealtime && mediaRecorderRealtime.state === 'recording') {
              console.log(`🔄 Real-time interval tick - chunks available: ${realtimeChunks.length}`);
              sendRealtimeChunk();
            } else {
@@ -1082,7 +1090,7 @@
                realtimeInterval = null;
              }
            }
-         }, 2000); // Every 2 seconds for faster response
+         }, 1500); // Every 1.5 seconds for faster response
          
        } catch (error) {
          console.error('Recording error:', error);
@@ -1091,8 +1099,11 @@
      }
 
     function stopRecording() {
-      if (mediaRecorder && mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
+      if (mediaRecorderRealtime && mediaRecorderRealtime.state === 'recording') {
+        mediaRecorderRealtime.stop();
+      }
+      if (mediaRecorderBatch && mediaRecorderBatch.state === 'recording') {
+        mediaRecorderBatch.stop();
       }
       
       // Stop real-time transcription
@@ -1110,8 +1121,11 @@
      function cancelRecording() {
        recordingCancelled = true; // Set flag to prevent processing
        
-       if (mediaRecorder && mediaRecorder.state === 'recording') {
-         mediaRecorder.stop();
+       if (mediaRecorderRealtime && mediaRecorderRealtime.state === 'recording') {
+         mediaRecorderRealtime.stop();
+       }
+       if (mediaRecorderBatch && mediaRecorderBatch.state === 'recording') {
+         mediaRecorderBatch.stop();
        }
        
        // Stop real-time transcription
@@ -1121,7 +1135,7 @@
        }
        
        // Clear audio chunks to prevent processing
-       audioChunks = [];
+       batchChunks = [];
        realtimeChunks = [];
        liveTranscriptionText = '';
        
@@ -1148,49 +1162,42 @@
          return;
        }
        
-       if (audioChunks.length === 0) {
+       if (batchChunks.length === 0) {
          console.log('No audio chunks available, skipping processing');
          return;
        }
        
-      // Use the live transcription text if available, otherwise do batch transcription
-      if (liveTranscriptionText.trim()) {
-        console.log('Using live transcription for SOEP generation');
-        document.getElementById('text-input').value = liveTranscriptionText.trim();
-        await generateSOEP();
-      } else {
-        console.log('Falling back to batch transcription');
-        // Fallback to original batch processing
-       const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-       const formData = new FormData();
+      // Always use batch recording for SOEP: send batch to backend (Azure-corrected) then generate SOEP
+      console.log('Processing batch recording for Azure-corrected transcription → SOEP');
+      const audioBlob = new Blob(batchChunks, { type: 'audio/webm' });
+      const formData = new FormData();
       formData.append('file', audioBlob, 'recording.webm');
-       
-       showLoading(true);
-       
-       try {
-         const response = await fetch('https://6f1468a0a99f.ngrok-free.app/transcribe-audio', {
-           method: 'POST',
-           body: formData
-         });
-         
-         const result = await response.json();
-         
-         if (result.error) {
-           throw new Error(result.error);
-         }
-         
-         // Set transcribed text
-        document.getElementById('text-input').value = result.transcription;
-         
-         // Auto-generate SOEP
-        await generateSOEP();
-         
-       } catch (error) {
-         console.error('Transcription error:', error);
-         alert('Fout bij transcriptie. Probeer het opnieuw.');
-      } finally {
-         showLoading(false);
+      
+      showLoading(true);
+      
+      try {
+        const response = await fetch('https://3d07579c93c2.ngrok-free.app/transcribe-audio', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+          throw new Error(result.error);
         }
+        
+        // Set transcribed text (Azure-corrected from backend)
+        document.getElementById('text-input').value = result.transcription || '';
+        
+        // Auto-generate SOEP
+        await generateSOEP();
+        
+      } catch (error) {
+        console.error('Transcription error:', error);
+        alert('Fout bij transcriptie. Probeer het opnieuw.');
+      } finally {
+        showLoading(false);
       }
          
             // Clean up
@@ -1297,7 +1304,7 @@
          const language2 = document.getElementById('language-2').value;
          
          // Send to AI for intelligent language detection and translation
-         const response = await fetch('https://6f1468a0a99f.ngrok-free.app/intelligent-translate', {
+         const response = await fetch('https://3d07579c93c2.ngrok-free.app/intelligent-translate', {
            method: 'POST',
            headers: {
              'Content-Type': 'application/json',
