@@ -11,6 +11,15 @@
     /* Custom styles */
     * { font-family: 'Inter', sans-serif; }
     
+    /* Soft Windows-like blue gradient background */
+    body {
+      background:
+        radial-gradient(900px 500px at 15% 20%, rgba(147, 197, 253, 0.28) 0%, rgba(147, 197, 253, 0.00) 60%),
+        radial-gradient(900px 520px at 85% 80%, rgba(125, 211, 252, 0.26) 0%, rgba(125, 211, 252, 0.00) 60%),
+        linear-gradient(180deg, #fbfdff 0%, #eef7ff 100%);
+      background-attachment: fixed;
+    }
+    
     /* Loading overlay */
     #loading-overlay {
       position: fixed;
@@ -152,8 +161,7 @@
     
     /* Live transcription styling */
     #live-transcription-display {
-      min-height: 120px;
-      max-height: 80vh; /* Very large max height */
+      height: 300px;
       overflow-y: auto;
       overflow-x: hidden;
       background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
@@ -774,8 +782,8 @@
     let pcmRingBuffer = [];
     let pcmSampleRate = 48000;
     const TARGET_SAMPLE_RATE = 16000;
-    const WINDOW_SECONDS = 15; // ~last 10 chunks (1.5s tick)
-    const MAX_BUFFER_SECONDS = 20;
+    const WINDOW_SECONDS = 30; // ~last 20 chunks (1.5s tick)
+    const MAX_BUFFER_SECONDS = 30;
 
     function downsampleTo16k(float32, originalRate) {
       if (originalRate === TARGET_SAMPLE_RATE) return float32;
@@ -1068,12 +1076,12 @@
          mediaRecorderRealtime.ondataavailable = event => {
            if (event.data.size > 0 && !recordingCancelled) {
              console.log(`🎵 RT chunk: ${event.data.size} bytes (buffer: ${realtimeChunks.length + 1})`);
-             realtimeChunks.push(event.data);
-             // Keep only last 10 chunks in buffer immediately for consistent windowing
-             const MAX_RT_CHUNKS = 10;
-             if (realtimeChunks.length > MAX_RT_CHUNKS) {
-               realtimeChunks = realtimeChunks.slice(-MAX_RT_CHUNKS);
-             }
+            realtimeChunks.push(event.data);
+            // Keep only last 20 chunks in buffer immediately for consistent windowing
+            const MAX_RT_CHUNKS = 20;
+            if (realtimeChunks.length > MAX_RT_CHUNKS) {
+              realtimeChunks = realtimeChunks.slice(-MAX_RT_CHUNKS);
+            }
              const display = document.getElementById('live-transcript-content');
              if (realtimeChunks.length === 1) {
                display.innerHTML = '<div class="typing-indicator" style="color: #0891b2;">🎵 Audio gedetecteerd, transcriptie start binnenkort...</div>';
