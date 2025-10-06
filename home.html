@@ -173,13 +173,12 @@
       animation: live-pulse 2s ease-in-out infinite;
       transition: all 0.3s ease;
       scroll-behavior: smooth;
-      resize: vertical; /* Allow manual resizing */
+      resize: none; /* Disable manual resizing */
     }
 
     /* Auto-expanding behavior */
     #live-transcription-display.expanding {
-      height: auto !important;
-      min-height: 200px;
+      height: 300px !important;
     }
 
     /* Better scrollbar for transcription */
